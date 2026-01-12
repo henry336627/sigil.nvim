@@ -33,7 +33,7 @@ Create a Neovim plugin that visually replaces text patterns with Unicode symbols
   - [x] 4.3 Implement word motions (`w`, `b`, `e`) awareness of symbol boundaries
   - [x] 4.4 Implement delete (`x`, `X`) to delete entire prettified symbol
   - [x] 4.5 Implement change (`s`, `c`) to replace entire prettified symbol
-  - [ ] 4.6 Handle visual mode selections across prettified symbols
+  - [x] 4.6 Handle visual mode selections across prettified symbols
   - [ ] 4.7 Write tests for atomic motions
 
 - [ ] Phase 5: Commands and API

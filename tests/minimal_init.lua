@@ -4,7 +4,7 @@
 -- Add plenary to runtimepath
 local plenary_path = vim.fn.expand("~/.local/share/nvim/lazy/plenary.nvim")
 if vim.fn.isdirectory(plenary_path) == 1 then
-  vim.opt.runtimepath:append(plenary_path)
+	vim.opt.runtimepath:append(plenary_path)
 end
 
 -- Add sigil to runtimepath (current directory)

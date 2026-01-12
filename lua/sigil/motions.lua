@@ -5,6 +5,19 @@ local state = require("sigil.state")
 
 local M = {}
 
+---Extract replacement character from extmark details
+---@param details table Extmark details
+---@return string|nil Replacement character
+local function get_replacement(details)
+	-- Check virt_text (overlay mode) first, then conceal (legacy mode)
+	if details.virt_text and #details.virt_text > 0 then
+		return details.virt_text[1][1]
+	elseif details.conceal and details.conceal ~= "" then
+		return details.conceal
+	end
+	return nil
+end
+
 ---Get extmark info at cursor position if it's a prettified symbol
 ---@param buf integer Buffer number
 ---@param row integer 0-indexed row
@@ -30,7 +43,7 @@ function M.get_symbol_at(buf, row, col)
 				id = mark_id,
 				start_col = mark_col,
 				end_col = end_col,
-				replacement = details.conceal,
+				replacement = get_replacement(details),
 			}
 		end
 	end
@@ -56,7 +69,7 @@ function M.get_next_symbol(buf, row, col)
 			id = mark[1],
 			start_col = mark[3],
 			end_col = mark[4].end_col or mark[3],
-			replacement = mark[4].conceal,
+			replacement = get_replacement(mark[4]),
 		}
 	end
 
@@ -85,7 +98,7 @@ function M.get_prev_symbol(buf, row, col)
 				id = mark[1],
 				start_col = mark[3],
 				end_col = end_col,
-				replacement = mark[4].conceal,
+				replacement = get_replacement(mark[4]),
 			}
 		end
 	end
@@ -519,16 +532,358 @@ function M.change_operator()
 	return "g@"
 end
 
+-- ============================================
+-- Visual Mode Support (4.6)
+-- ============================================
+
+---Get the visual selection range
+---@return integer, integer, integer, integer start_row, start_col, end_row, end_col (0-indexed)
+local function get_visual_range()
+	local start_pos = vim.fn.getpos("v")
+	local end_pos = vim.fn.getpos(".")
+
+	local start_row = start_pos[2] - 1
+	local start_col = start_pos[3] - 1
+	local end_row = end_pos[2] - 1
+	local end_col = end_pos[3] - 1
+
+	-- Ensure start is before end
+	if start_row > end_row or (start_row == end_row and start_col > end_col) then
+		start_row, end_row = end_row, start_row
+		start_col, end_col = end_col, start_col
+	end
+
+	return start_row, start_col, end_row, end_col
+end
+
+---Expand visual selection to include full prettified symbols at boundaries
+---@param buf integer
+---@param start_row integer 0-indexed
+---@param start_col integer 0-indexed
+---@param end_row integer 0-indexed
+---@param end_col integer 0-indexed
+---@return integer, integer, integer, integer Expanded range
+local function expand_selection_to_symbols(buf, start_row, start_col, end_row, end_col)
+	-- Check if start is inside a prettified symbol
+	local start_symbol = M.get_symbol_at(buf, start_row, start_col)
+	if start_symbol and start_col > start_symbol.start_col then
+		start_col = start_symbol.start_col
+	end
+
+	-- Check if end is inside a prettified symbol
+	local end_symbol = M.get_symbol_at(buf, end_row, end_col)
+	if end_symbol and end_col < end_symbol.end_col - 1 then
+		end_col = end_symbol.end_col - 1
+	end
+
+	return start_row, start_col, end_row, end_col
+end
+
+---Move cursor right in visual mode, treating prettified symbols as single chars
+function M.visual_move_right()
+	local buf = vim.api.nvim_get_current_buf()
+	local cursor = vim.api.nvim_win_get_cursor(0)
+	local row = cursor[1] - 1 -- 0-indexed
+	local col = cursor[2] -- 0-indexed
+
+	local line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1]
+	if not line then
+		vim.cmd("normal! l")
+		return
+	end
+
+	-- Check if we're on a prettified symbol
+	local symbol = M.get_symbol_at(buf, row, col)
+
+	if symbol then
+		-- Move to end of symbol
+		if symbol.end_col < #line then
+			vim.api.nvim_win_set_cursor(0, { row + 1, symbol.end_col })
+		else
+			vim.cmd("normal! l")
+		end
+	else
+		-- Check if next position is a prettified symbol
+		local next_symbol = M.get_symbol_at(buf, row, col + 1)
+		if next_symbol then
+			-- Move to end of that symbol
+			vim.api.nvim_win_set_cursor(0, { row + 1, next_symbol.end_col - 1 })
+		else
+			vim.cmd("normal! l")
+		end
+	end
+end
+
+---Move cursor left in visual mode, treating prettified symbols as single chars
+function M.visual_move_left()
+	local buf = vim.api.nvim_get_current_buf()
+	local cursor = vim.api.nvim_win_get_cursor(0)
+	local row = cursor[1] - 1 -- 0-indexed
+	local col = cursor[2] -- 0-indexed
+
+	-- Check if we're on a prettified symbol (not at its start)
+	local symbol = M.get_symbol_at(buf, row, col)
+
+	if symbol and col > symbol.start_col then
+		-- Move to start of symbol
+		vim.api.nvim_win_set_cursor(0, { row + 1, symbol.start_col })
+	elseif col > 0 then
+		-- Check if position to the left is part of a symbol
+		local prev_symbol = M.get_symbol_at(buf, row, col - 1)
+
+		if prev_symbol then
+			-- Move to start of that symbol
+			vim.api.nvim_win_set_cursor(0, { row + 1, prev_symbol.start_col })
+		else
+			vim.cmd("normal! h")
+		end
+	else
+		vim.cmd("normal! h")
+	end
+end
+
+---Move to next word in visual mode, treating prettified symbols as boundaries
+function M.visual_move_word_forward()
+	local buf = vim.api.nvim_get_current_buf()
+	local cursor = vim.api.nvim_win_get_cursor(0)
+	local row = cursor[1] - 1 -- 0-indexed
+	local col = cursor[2] -- 0-indexed
+
+	local line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1]
+	if not line or #line == 0 then
+		vim.cmd("normal! w")
+		return
+	end
+
+	-- If we're on a prettified symbol, skip to end of it first
+	local symbol = M.get_symbol_at(buf, row, col)
+	if symbol then
+		col = symbol.end_col
+	else
+		-- Skip current word
+		local char = line:sub(col + 1, col + 1)
+		if is_word_char(char) then
+			while col < #line do
+				local next_symbol = M.get_symbol_at(buf, row, col)
+				if next_symbol then
+					col = next_symbol.end_col
+					break
+				end
+				local c = line:sub(col + 1, col + 1)
+				if not is_word_char(c) then
+					break
+				end
+				col = col + 1
+			end
+		elseif not is_whitespace(char) then
+			while col < #line do
+				local next_symbol = M.get_symbol_at(buf, row, col)
+				if next_symbol then
+					col = next_symbol.end_col
+					break
+				end
+				local c = line:sub(col + 1, col + 1)
+				if is_word_char(c) or is_whitespace(c) then
+					break
+				end
+				col = col + 1
+			end
+		end
+	end
+
+	-- Skip whitespace
+	while col < #line do
+		local c = line:sub(col + 1, col + 1)
+		if not is_whitespace(c) then
+			break
+		end
+		col = col + 1
+	end
+
+	if col >= #line then
+		vim.cmd("normal! w")
+		return
+	end
+
+	vim.api.nvim_win_set_cursor(0, { row + 1, col })
+end
+
+---Move to previous word in visual mode, treating prettified symbols as boundaries
+function M.visual_move_word_backward()
+	local buf = vim.api.nvim_get_current_buf()
+	local cursor = vim.api.nvim_win_get_cursor(0)
+	local row = cursor[1] - 1 -- 0-indexed
+	local col = cursor[2] -- 0-indexed
+
+	local line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1]
+	if not line or col == 0 then
+		vim.cmd("normal! b")
+		return
+	end
+
+	-- Move one position left first
+	col = col - 1
+
+	-- Skip whitespace going backward
+	while col > 0 do
+		local c = line:sub(col + 1, col + 1)
+		if not is_whitespace(c) then
+			break
+		end
+		col = col - 1
+	end
+
+	-- Check if we're now on a prettified symbol
+	local symbol = M.get_symbol_at(buf, row, col)
+	if symbol then
+		vim.api.nvim_win_set_cursor(0, { row + 1, symbol.start_col })
+		return
+	end
+
+	-- Find start of current word/punctuation sequence
+	local char = line:sub(col + 1, col + 1)
+	if is_word_char(char) then
+		while col > 0 do
+			local prev_symbol = M.get_symbol_at(buf, row, col - 1)
+			if prev_symbol then
+				break
+			end
+			local c = line:sub(col, col)
+			if not is_word_char(c) then
+				break
+			end
+			col = col - 1
+		end
+	elseif not is_whitespace(char) then
+		while col > 0 do
+			local prev_symbol = M.get_symbol_at(buf, row, col - 1)
+			if prev_symbol then
+				break
+			end
+			local c = line:sub(col, col)
+			if is_word_char(c) or is_whitespace(c) then
+				break
+			end
+			col = col - 1
+		end
+	end
+
+	if col < 0 then
+		vim.cmd("normal! b")
+		return
+	end
+
+	vim.api.nvim_win_set_cursor(0, { row + 1, col })
+end
+
+---Move to end of word in visual mode, treating prettified symbols as boundaries
+function M.visual_move_word_end()
+	local buf = vim.api.nvim_get_current_buf()
+	local cursor = vim.api.nvim_win_get_cursor(0)
+	local row = cursor[1] - 1 -- 0-indexed
+	local col = cursor[2] -- 0-indexed
+
+	local line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1]
+	if not line or #line == 0 then
+		vim.cmd("normal! e")
+		return
+	end
+
+	-- If we're on a prettified symbol, skip past it first
+	local current_symbol = M.get_symbol_at(buf, row, col)
+	if current_symbol then
+		col = current_symbol.end_col
+	else
+		col = col + 1
+	end
+
+	-- Skip whitespace
+	while col < #line do
+		local c = line:sub(col + 1, col + 1)
+		if not is_whitespace(c) then
+			break
+		end
+		col = col + 1
+	end
+
+	if col >= #line then
+		vim.cmd("normal! e")
+		return
+	end
+
+	-- Check if we're now on a prettified symbol
+	local symbol = M.get_symbol_at(buf, row, col)
+	if symbol then
+		-- In visual mode, position at end of symbol (end_col - 1)
+		vim.api.nvim_win_set_cursor(0, { row + 1, symbol.end_col - 1 })
+		return
+	end
+
+	-- Find end of current word/punctuation sequence
+	local char = line:sub(col + 1, col + 1)
+	if is_word_char(char) then
+		while col < #line - 1 do
+			local next_symbol = M.get_symbol_at(buf, row, col + 1)
+			if next_symbol then
+				break
+			end
+			local c = line:sub(col + 2, col + 2)
+			if not is_word_char(c) then
+				break
+			end
+			col = col + 1
+		end
+	elseif not is_whitespace(char) then
+		while col < #line - 1 do
+			local next_symbol = M.get_symbol_at(buf, row, col + 1)
+			if next_symbol then
+				break
+			end
+			local c = line:sub(col + 2, col + 2)
+			if is_word_char(c) or is_whitespace(c) then
+				break
+			end
+			col = col + 1
+		end
+	end
+
+	vim.api.nvim_win_set_cursor(0, { row + 1, col })
+end
+
+---Adjust visual selection to include full prettified symbols
+---Called after standard visual operations (d, y, c) via operatorfunc
+function M.visual_adjust_selection()
+	local buf = vim.api.nvim_get_current_buf()
+	local mode = vim.fn.mode()
+
+	if mode ~= "v" and mode ~= "V" and mode ~= "\22" then
+		return
+	end
+
+	local start_row, start_col, end_row, end_col = get_visual_range()
+	local new_start_row, new_start_col, new_end_row, new_end_col =
+		expand_selection_to_symbols(buf, start_row, start_col, end_row, end_col)
+
+	-- If selection was expanded, update it
+	if new_start_col ~= start_col or new_end_col ~= end_col then
+		-- Exit visual mode and reselect with new range
+		vim.cmd("normal! \\<Esc>")
+		vim.api.nvim_win_set_cursor(0, { new_start_row + 1, new_start_col })
+		vim.cmd("normal! v")
+		vim.api.nvim_win_set_cursor(0, { new_end_row + 1, new_end_col })
+	end
+end
+
 ---Setup keymaps for atomic symbol motions
 ---@param buf integer
 function M.setup_keymaps(buf)
 	local opts = { buffer = buf, silent = true }
 
-	-- Character motions
+	-- Character motions (normal mode)
 	vim.keymap.set("n", "l", M.move_right, opts)
 	vim.keymap.set("n", "h", M.move_left, opts)
 
-	-- Word motions
+	-- Word motions (normal mode)
 	vim.keymap.set("n", "w", M.move_word_forward, opts)
 	vim.keymap.set("n", "b", M.move_word_backward, opts)
 	vim.keymap.set("n", "e", M.move_word_end, opts)
@@ -540,16 +895,23 @@ function M.setup_keymaps(buf)
 	-- Change operations
 	vim.keymap.set("n", "s", M.substitute_char, opts)
 	vim.keymap.set("n", "c", M.change_operator, { buffer = buf, silent = true, expr = true })
+
+	-- Visual mode motions (4.6)
+	vim.keymap.set("x", "l", M.visual_move_right, opts)
+	vim.keymap.set("x", "h", M.visual_move_left, opts)
+	vim.keymap.set("x", "w", M.visual_move_word_forward, opts)
+	vim.keymap.set("x", "b", M.visual_move_word_backward, opts)
+	vim.keymap.set("x", "e", M.visual_move_word_end, opts)
 end
 
 ---Remove keymaps for atomic symbol motions
 ---@param buf integer
 function M.remove_keymaps(buf)
-	-- Character motions
+	-- Character motions (normal mode)
 	pcall(vim.keymap.del, "n", "l", { buffer = buf })
 	pcall(vim.keymap.del, "n", "h", { buffer = buf })
 
-	-- Word motions
+	-- Word motions (normal mode)
 	pcall(vim.keymap.del, "n", "w", { buffer = buf })
 	pcall(vim.keymap.del, "n", "b", { buffer = buf })
 	pcall(vim.keymap.del, "n", "e", { buffer = buf })
@@ -561,6 +923,13 @@ function M.remove_keymaps(buf)
 	-- Change operations
 	pcall(vim.keymap.del, "n", "s", { buffer = buf })
 	pcall(vim.keymap.del, "n", "c", { buffer = buf })
+
+	-- Visual mode motions (4.6)
+	pcall(vim.keymap.del, "x", "l", { buffer = buf })
+	pcall(vim.keymap.del, "x", "h", { buffer = buf })
+	pcall(vim.keymap.del, "x", "w", { buffer = buf })
+	pcall(vim.keymap.del, "x", "b", { buffer = buf })
+	pcall(vim.keymap.del, "x", "e", { buffer = buf })
 end
 
 return M
