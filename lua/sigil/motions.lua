@@ -438,6 +438,87 @@ function M.delete_char_before()
 	end
 end
 
+---Substitute character under cursor (or entire prettified symbol) and enter insert mode
+function M.substitute_char()
+	local buf = vim.api.nvim_get_current_buf()
+	local cursor = vim.api.nvim_win_get_cursor(0)
+	local row = cursor[1] - 1 -- 0-indexed
+	local col = cursor[2] -- 0-indexed
+
+	-- Check if we're on a prettified symbol
+	local symbol = M.get_symbol_at(buf, row, col)
+
+	if symbol then
+		-- Delete the entire symbol text and enter insert mode
+		local line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1]
+		local new_line = line:sub(1, symbol.start_col) .. line:sub(symbol.end_col + 1)
+		vim.api.nvim_buf_set_lines(buf, row, row + 1, false, { new_line })
+		-- Position cursor at symbol start and enter insert mode
+		vim.api.nvim_win_set_cursor(0, { row + 1, symbol.start_col })
+		vim.cmd("startinsert")
+	else
+		-- Normal substitute
+		vim.cmd("normal! s")
+	end
+end
+
+---Change operator function for use with motions
+---This is called by operatorfunc after a motion is applied
+---@param type string The type of motion: 'char', 'line', or 'block'
+function M.change_opfunc(type)
+	local buf = vim.api.nvim_get_current_buf()
+
+	if type == "char" then
+		-- Get the range marked by '[ and ']
+		local start_pos = vim.api.nvim_buf_get_mark(buf, "[")
+		local end_pos = vim.api.nvim_buf_get_mark(buf, "]")
+
+		local start_row = start_pos[1] - 1 -- 0-indexed
+		local start_col = start_pos[2]
+		local end_row = end_pos[1] - 1
+		local end_col = end_pos[2]
+
+		-- Handle single-line change
+		if start_row == end_row then
+			-- Check if start position is on a prettified symbol
+			local start_symbol = M.get_symbol_at(buf, start_row, start_col)
+			if start_symbol and start_col > start_symbol.start_col then
+				-- Expand start to include whole symbol
+				start_col = start_symbol.start_col
+			end
+
+			-- Check if end position is on a prettified symbol
+			local end_symbol = M.get_symbol_at(buf, end_row, end_col)
+			if end_symbol then
+				-- Expand end to include whole symbol
+				end_col = end_symbol.end_col - 1
+			end
+
+			-- Delete the range and enter insert mode
+			local line = vim.api.nvim_buf_get_lines(buf, start_row, start_row + 1, false)[1]
+			local new_line = line:sub(1, start_col) .. line:sub(end_col + 2)
+			vim.api.nvim_buf_set_lines(buf, start_row, start_row + 1, false, { new_line })
+			vim.api.nvim_win_set_cursor(0, { start_row + 1, start_col })
+			vim.cmd("startinsert")
+		else
+			-- Multi-line change - use normal behavior
+			vim.cmd('normal! `[v`]"_c')
+		end
+	elseif type == "line" then
+		-- Line-wise change - use normal behavior
+		vim.cmd('normal! `[V`]"_c')
+	else
+		-- Block change - use normal behavior
+		vim.cmd('normal! `[\\<C-V>`]"_c')
+	end
+end
+
+---Set up change operator and wait for motion
+function M.change_operator()
+	vim.o.operatorfunc = "v:lua.require'sigil.motions'.change_opfunc"
+	return "g@"
+end
+
 ---Setup keymaps for atomic symbol motions
 ---@param buf integer
 function M.setup_keymaps(buf)
@@ -455,6 +536,10 @@ function M.setup_keymaps(buf)
 	-- Delete operations
 	vim.keymap.set("n", "x", M.delete_char, opts)
 	vim.keymap.set("n", "X", M.delete_char_before, opts)
+
+	-- Change operations
+	vim.keymap.set("n", "s", M.substitute_char, opts)
+	vim.keymap.set("n", "c", M.change_operator, { buffer = buf, silent = true, expr = true })
 end
 
 ---Remove keymaps for atomic symbol motions
@@ -472,6 +557,10 @@ function M.remove_keymaps(buf)
 	-- Delete operations
 	pcall(vim.keymap.del, "n", "x", { buffer = buf })
 	pcall(vim.keymap.del, "n", "X", { buffer = buf })
+
+	-- Change operations
+	pcall(vim.keymap.del, "n", "s", { buffer = buf })
+	pcall(vim.keymap.del, "n", "c", { buffer = buf })
 end
 
 return M

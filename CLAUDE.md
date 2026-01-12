@@ -22,6 +22,7 @@ The `examples/` directory contains working Lua files demonstrating each phase's 
 Use these to understand how features work in practice:
 
 - `phase_3.lua` — Context-aware prettification (predicates, skip strings/comments)
+- `phase_4.lua` — Atomic symbol motions (h/l, w/b/e, x/X, s/c)
 
 To test an example:
 ```bash
@@ -29,6 +30,12 @@ nvim examples/phase_3.lua
 :lua require("sigil").setup()
 :set conceallevel=2
 ```
+
+**IMPORTANT:** After implementing parts of a Phase, always add or update examples in the `examples/` directory:
+- Create `examples/phase_N.lua` if it doesn't exist
+- Add demonstration code for each implemented feature (4.1, 4.2, etc.)
+- Include usage instructions and expected behavior in comments
+- Examples serve as both documentation and manual testing aid
 
 ## Verification Commands
 

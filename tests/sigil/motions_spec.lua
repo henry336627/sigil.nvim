@@ -388,13 +388,104 @@ describe("sigil.motions", function()
 		end)
 	end)
 
+	describe("substitute_char", function()
+		before_each(function()
+			vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "x -> y" })
+			state.attach(buf)
+			prettify.prettify_buffer(buf)
+		end)
+
+		it("should delete entire symbol when cursor is on it", function()
+			-- Start on '->' at col 2
+			vim.api.nvim_win_set_cursor(0, { 1, 2 })
+			motions.substitute_char()
+
+			local line = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1]
+			-- '->' should be deleted, leaving "x  y"
+			assert.equals("x  y", line)
+
+			-- Cursor should be at position where symbol was
+			local cursor = vim.api.nvim_win_get_cursor(0)
+			assert.equals(2, cursor[2])
+
+			-- Note: startinsert may not work in headless mode, so we don't check mode
+			-- Exit insert mode for cleanup (in case it worked)
+			vim.cmd("stopinsert")
+		end)
+
+		it("should delete entire symbol when cursor is inside it", function()
+			-- Start inside '->' at col 3 (on '>')
+			vim.api.nvim_win_set_cursor(0, { 1, 3 })
+			motions.substitute_char()
+
+			local line = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1]
+			assert.equals("x  y", line)
+
+			-- Exit insert mode for cleanup
+			vim.cmd("stopinsert")
+		end)
+
+		it("should delete single char when not on symbol", function()
+			-- Start at col 5 ('y') - not on a prettified symbol
+			vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "x -> y" })
+			vim.api.nvim_win_set_cursor(0, { 1, 5 })
+
+			-- For non-symbol, it calls normal! s which deletes 'y'
+			motions.substitute_char()
+
+			local line = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1]
+			-- 'y' should be deleted by normal! s
+			assert.equals("x -> ", line)
+
+			-- Exit insert mode for cleanup
+			vim.cmd("stopinsert")
+		end)
+	end)
+
+	describe("change_opfunc", function()
+		before_each(function()
+			vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "foo -> bar" })
+			state.attach(buf)
+			prettify.prettify_buffer(buf)
+		end)
+
+		it("should expand range to include whole symbol at start", function()
+			-- Set marks to simulate a motion that starts inside a symbol
+			-- '->' is at col 4-5, 'bar' starts at col 7
+			vim.api.nvim_buf_set_mark(buf, "[", 1, 4, {}) -- start of '->'
+			vim.api.nvim_buf_set_mark(buf, "]", 1, 6, {}) -- space after
+
+			motions.change_opfunc("char")
+
+			local line = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1]
+			-- Should delete from start of '->' to end of range
+			assert.equals("foo bar", line)
+
+			vim.cmd("stopinsert")
+		end)
+
+		it("should expand range to include whole symbol at end", function()
+			-- Set marks: start before symbol, end inside symbol
+			vim.api.nvim_buf_set_mark(buf, "[", 1, 3, {}) -- space before '->'
+			vim.api.nvim_buf_set_mark(buf, "]", 1, 5, {}) -- '>' of '->'
+
+			motions.change_opfunc("char")
+
+			local line = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1]
+			-- Should delete space and entire '->'
+			assert.equals("foo bar", line)
+
+			vim.cmd("stopinsert")
+		end)
+	end)
+
 	describe("keymaps", function()
 		it("should setup keymaps for buffer", function()
 			motions.setup_keymaps(buf)
 
 			-- Check that keymaps exist
 			local keymaps = vim.api.nvim_buf_get_keymap(buf, "n")
-			local expected = { "l", "h", "w", "b", "e", "x", "X" }
+			local expected = { "l", "h", "w", "b", "e", "x", "X", "s", "c" }
 			local found = {}
 
 			for _, map in ipairs(keymaps) do
@@ -418,7 +509,7 @@ describe("sigil.motions", function()
 			motions.remove_keymaps(buf)
 
 			local keymaps = vim.api.nvim_buf_get_keymap(buf, "n")
-			local expected = { "l", "h", "w", "b", "e", "x", "X" }
+			local expected = { "l", "h", "w", "b", "e", "x", "X", "s", "c" }
 			local found = {}
 
 			for _, map in ipairs(keymaps) do
