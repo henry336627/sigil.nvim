@@ -20,12 +20,12 @@ Create a Neovim plugin that visually replaces text patterns with Unicode symbols
   - [x] 2.6 Implement `setup()` function
   - [x] 2.7 Write unit tests for core logic
 
-- [ ] Phase 3: Context-Aware Prettification
-  - [ ] 3.1 Add predicate system (like `prettify-symbols-compose-predicate`)
-  - [ ] 3.2 Implement Tree-sitter context detection (strings/comments)
-  - [ ] 3.3 Implement syntax API fallback when Tree-sitter unavailable
-  - [ ] 3.4 Allow custom predicates per filetype
-  - [ ] 3.5 Write tests for predicate system
+- [x] Phase 3: Context-Aware Prettification
+  - [x] 3.1 Add predicate system (like `prettify-symbols-compose-predicate`)
+  - [x] 3.2 Implement Tree-sitter context detection (strings/comments)
+  - [x] 3.3 Implement syntax API fallback when Tree-sitter unavailable
+  - [x] 3.4 Allow custom predicates per filetype
+  - [x] 3.5 Write tests for predicate system
 
 - [ ] Phase 4: Atomic Symbol Motions
   - [ ] 4.1 Create module for cursor position detection on prettified symbols
@@ -67,7 +67,7 @@ Create a Neovim plugin that visually replaces text patterns with Unicode symbols
 - Atomic symbol motions: prettified symbols behave as single characters for navigation/editing
 
 ## Status
-**Phase 2 COMPLETE** — MVP ready, continue with Phase 3: Context-Aware Prettification
+**Phase 3 COMPLETE** — Context-aware prettification ready, continue with Phase 4: Atomic Symbol Motions
 
 ## Files
 - `task_plan.md` — this file

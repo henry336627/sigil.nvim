@@ -14,6 +14,21 @@ Inspired by Emacs `prettify-symbols-mode`.
 - `lua/sigil/` — main plugin code
 - `plugin/sigil.lua` — entry point
 - `tests/` — plenary.nvim tests
+- `examples/` — working examples for each implemented phase
+
+## Examples
+
+The `examples/` directory contains working Lua files demonstrating each phase's functionality.
+Use these to understand how features work in practice:
+
+- `phase_3.lua` — Context-aware prettification (predicates, skip strings/comments)
+
+To test an example:
+```bash
+nvim examples/phase_3.lua
+:lua require("sigil").setup()
+:set conceallevel=2
+```
 
 ## Verification Commands
 
