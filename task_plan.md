@@ -5,44 +5,53 @@ Create a Neovim plugin that visually replaces text patterns with Unicode symbols
 
 ## Phases
 
-- [ ] Phase 1: Project Setup
-  - [ ] 1.1 Create plugin directory structure
-  - [ ] 1.2 Create minimal plugin entry point (`plugin/sigil.lua`)
-  - [ ] 1.3 Setup test infrastructure (minimal_init.lua, smoke test)
-  - [ ] 1.4 Verify tests run correctly
+- [x] Phase 1: Project Setup
+  - [x] 1.1 Create plugin directory structure
+  - [x] 1.2 Create minimal plugin entry point (`plugin/sigil.lua`)
+  - [x] 1.3 Setup test infrastructure (minimal_init.lua, smoke test)
+  - [x] 1.4 Verify tests run correctly
 
-- [ ] Phase 2: Core MVP (Emacs parity)
-  - [ ] 2.1 Create config module with default symbols alist
-  - [ ] 2.2 Create namespace manager module
-  - [ ] 2.3 Create extmark wrapper module
-  - [ ] 2.4 Create core prettify logic (pattern matching + extmark placement)
-  - [ ] 2.5 Create buffer attach/detach logic with autocmds
-  - [ ] 2.6 Implement `setup()` function
-  - [ ] 2.7 Write unit tests for core logic
+- [x] Phase 2: Core MVP (Emacs parity)
+  - [x] 2.1 Create config module with default symbols alist
+  - [x] 2.2 Create namespace manager module
+  - [x] 2.3 Create extmark wrapper module
+  - [x] 2.4 Create core prettify logic (pattern matching + extmark placement)
+  - [x] 2.5 Create buffer attach/detach logic with autocmds
+  - [x] 2.6 Implement `setup()` function
+  - [x] 2.7 Write unit tests for core logic
 
-- [ ] Phase 3: Unprettify at Point
-  - [ ] 3.1 Implement cursor position tracking
-  - [ ] 3.2 Show original text when cursor is on prettified symbol
-  - [ ] 3.3 Add `unprettify_at_point` config option (nil, true, 'right-edge')
-  - [ ] 3.4 Write tests for unprettify behavior
+- [ ] Phase 3: Context-Aware Prettification
+  - [ ] 3.1 Add predicate system (like `prettify-symbols-compose-predicate`)
+  - [ ] 3.2 Implement Tree-sitter context detection (strings/comments)
+  - [ ] 3.3 Implement syntax API fallback when Tree-sitter unavailable
+  - [ ] 3.4 Allow custom predicates per filetype
+  - [ ] 3.5 Write tests for predicate system
 
-- [ ] Phase 4: Context-Aware Prettification
-  - [ ] 4.1 Add predicate system (like `prettify-symbols-compose-predicate`)
-  - [ ] 4.2 Implement Tree-sitter context detection (strings/comments)
-  - [ ] 4.3 Implement syntax API fallback when Tree-sitter unavailable
-  - [ ] 4.4 Allow custom predicates per filetype
-  - [ ] 4.5 Write tests for predicate system
+- [ ] Phase 4: Atomic Symbol Motions
+  - [ ] 4.1 Create module for cursor position detection on prettified symbols
+  - [ ] 4.2 Implement motion remaps (`l`, `h`) to skip over entire symbol
+  - [ ] 4.3 Implement word motions (`w`, `b`, `e`) awareness of symbol boundaries
+  - [ ] 4.4 Implement delete (`x`, `X`) to delete entire prettified symbol
+  - [ ] 4.5 Implement change (`s`, `c`) to replace entire prettified symbol
+  - [ ] 4.6 Handle visual mode selections across prettified symbols
+  - [ ] 4.7 Write tests for atomic motions
 
 - [ ] Phase 5: Commands and API
-  - [ ] 5.1 Add `:Sigil` toggle command
-  - [ ] 5.2 Add `:SigilEnable` / `:SigilDisable` commands
-  - [ ] 5.3 Expose public API for programmatic control
+  - [x] 5.1 Add `:Sigil` toggle command
+  - [x] 5.2 Add `:SigilEnable` / `:SigilDisable` commands
+  - [x] 5.3 Expose public API for programmatic control
   - [ ] 5.4 Write tests for commands
 
 - [ ] Phase 6: Documentation and Polish
   - [ ] 6.1 Write vimdoc help file (`doc/sigil.txt`)
   - [ ] 6.2 Add README.md with usage examples
   - [ ] 6.3 Final review and cleanup
+
+- [ ] Phase 7: Optional - Unprettify at Point
+  - [ ] 7.1 Implement cursor position tracking
+  - [ ] 7.2 Show original text when cursor is on prettified symbol
+  - [ ] 7.3 Add `unprettify_at_point` config option (nil, true, 'right-edge')
+  - [ ] 7.4 Write tests for unprettify behavior
 
 ## Blocked / Open Questions
 - [ ] Multi-character replacement display (compose vs single char)?
@@ -53,9 +62,12 @@ Create a Neovim plugin that visually replaces text patterns with Unicode symbols
 - Follow render-markdown.nvim patterns for plugin structure
 - Tree-sitter for context detection with syntax API fallback
 - MVP first, extensions later
+- Unprettify-at-point is optional (default: symbols stay prettified under cursor)
+- Symbols stay concealed in all modes (concealcursor = "nvic")
+- Atomic symbol motions: prettified symbols behave as single characters for navigation/editing
 
 ## Status
-**Phase 1.1** — Ready to start project setup
+**Phase 2 COMPLETE** — MVP ready, continue with Phase 3: Context-Aware Prettification
 
 ## Files
 - `task_plan.md` — this file
