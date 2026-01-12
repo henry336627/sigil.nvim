@@ -53,6 +53,14 @@ Create a Neovim plugin that visually replaces text patterns with Unicode symbols
   - [ ] 7.3 Add `unprettify_at_point` config option (nil, true, 'right-edge')
   - [ ] 7.4 Write tests for unprettify behavior
 
+- [ ] Phase 8: Performance Optimization
+  - [ ] 8.1 Use `nvim_buf_attach` for incremental updates (only changed lines)
+  - [ ] 8.2 Add debounce for TextChangedI (avoid excessive updates while typing)
+  - [ ] 8.3 Cache sorted symbols list (avoid re-sorting on every line)
+  - [ ] 8.4 Optimize visible range only (defer off-screen lines)
+  - [ ] 8.5 Benchmark and profile on large files (10,000+ lines)
+  - [ ] 8.6 Write performance tests
+
 ## Blocked / Open Questions
 - [ ] Multi-character replacement display (compose vs single char)?
 
