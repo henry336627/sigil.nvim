@@ -209,26 +209,205 @@ describe("sigil.motions", function()
 		end)
 	end)
 
+	describe("move_word_forward", function()
+		before_each(function()
+			vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "foo -> bar baz" })
+			state.attach(buf)
+			prettify.prettify_buffer(buf)
+		end)
+
+		it("should move to next word start", function()
+			-- Start at col 0 ('f')
+			vim.api.nvim_win_set_cursor(0, { 1, 0 })
+			motions.move_word_forward()
+
+			local cursor = vim.api.nvim_win_get_cursor(0)
+			-- Should be at col 4 (start of '->')
+			assert.equals(4, cursor[2])
+		end)
+
+		it("should skip over symbol to next word", function()
+			-- Start on '->' at col 4
+			vim.api.nvim_win_set_cursor(0, { 1, 4 })
+			motions.move_word_forward()
+
+			local cursor = vim.api.nvim_win_get_cursor(0)
+			-- Should be at col 7 ('b' of 'bar')
+			assert.equals(7, cursor[2])
+		end)
+
+		it("should move normally between regular words", function()
+			-- Start at col 7 ('b' of 'bar')
+			vim.api.nvim_win_set_cursor(0, { 1, 7 })
+			motions.move_word_forward()
+
+			local cursor = vim.api.nvim_win_get_cursor(0)
+			-- Should be at col 11 ('b' of 'baz')
+			assert.equals(11, cursor[2])
+		end)
+	end)
+
+	describe("move_word_backward", function()
+		before_each(function()
+			vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "foo -> bar baz" })
+			state.attach(buf)
+			prettify.prettify_buffer(buf)
+		end)
+
+		it("should move to previous word start", function()
+			-- Start at col 11 ('b' of 'baz')
+			vim.api.nvim_win_set_cursor(0, { 1, 11 })
+			motions.move_word_backward()
+
+			local cursor = vim.api.nvim_win_get_cursor(0)
+			-- Should be at col 7 ('b' of 'bar')
+			assert.equals(7, cursor[2])
+		end)
+
+		it("should skip over symbol when moving backward", function()
+			-- Start at col 7 ('b' of 'bar')
+			vim.api.nvim_win_set_cursor(0, { 1, 7 })
+			motions.move_word_backward()
+
+			local cursor = vim.api.nvim_win_get_cursor(0)
+			-- Should be at col 4 (start of '->')
+			assert.equals(4, cursor[2])
+		end)
+
+		it("should move to word start before symbol", function()
+			-- Start at col 4 (start of '->')
+			vim.api.nvim_win_set_cursor(0, { 1, 4 })
+			motions.move_word_backward()
+
+			local cursor = vim.api.nvim_win_get_cursor(0)
+			-- Should be at col 0 ('f' of 'foo')
+			assert.equals(0, cursor[2])
+		end)
+	end)
+
+	describe("move_word_end", function()
+		before_each(function()
+			vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "foo -> bar baz" })
+			state.attach(buf)
+			prettify.prettify_buffer(buf)
+		end)
+
+		it("should move to end of next word", function()
+			-- Start at col 0 ('f')
+			vim.api.nvim_win_set_cursor(0, { 1, 0 })
+			motions.move_word_end()
+
+			local cursor = vim.api.nvim_win_get_cursor(0)
+			-- Should be at col 2 ('o' of 'foo')
+			assert.equals(2, cursor[2])
+		end)
+
+		it("should move to end of symbol", function()
+			-- Start at col 3 (space before '->')
+			vim.api.nvim_win_set_cursor(0, { 1, 3 })
+			motions.move_word_end()
+
+			local cursor = vim.api.nvim_win_get_cursor(0)
+			-- Should be at col 4 (start of '->'), visually "on" the concealed symbol
+			assert.equals(4, cursor[2])
+		end)
+
+		it("should skip over symbol to next word end", function()
+			-- Start at col 5 ('>' of '->')
+			vim.api.nvim_win_set_cursor(0, { 1, 5 })
+			motions.move_word_end()
+
+			local cursor = vim.api.nvim_win_get_cursor(0)
+			-- Should be at col 9 ('r' of 'bar')
+			assert.equals(9, cursor[2])
+		end)
+	end)
+
+	describe("delete_char", function()
+		before_each(function()
+			vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "x -> y" })
+			state.attach(buf)
+			prettify.prettify_buffer(buf)
+		end)
+
+		it("should delete entire symbol when cursor is on it", function()
+			-- Start on '->' at col 2
+			vim.api.nvim_win_set_cursor(0, { 1, 2 })
+			motions.delete_char()
+
+			local line = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1]
+			-- '->' should be deleted, leaving "x  y"
+			assert.equals("x  y", line)
+		end)
+
+		it("should delete entire symbol when cursor is inside it", function()
+			-- Start inside '->' at col 3 (on '>')
+			vim.api.nvim_win_set_cursor(0, { 1, 3 })
+			motions.delete_char()
+
+			local line = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1]
+			assert.equals("x  y", line)
+		end)
+
+		it("should delete single char when not on symbol", function()
+			-- Start at col 0 ('x')
+			vim.api.nvim_win_set_cursor(0, { 1, 0 })
+			motions.delete_char()
+
+			local line = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1]
+			-- 'x' should be deleted
+			assert.equals(" -> y", line)
+		end)
+	end)
+
+	describe("delete_char_before", function()
+		before_each(function()
+			vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "x -> y" })
+			state.attach(buf)
+			prettify.prettify_buffer(buf)
+		end)
+
+		it("should delete entire symbol when immediately after it", function()
+			-- Start at col 4 (space after '->')
+			vim.api.nvim_win_set_cursor(0, { 1, 4 })
+			motions.delete_char_before()
+
+			local line = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1]
+			-- '->' should be deleted
+			assert.equals("x  y", line)
+		end)
+
+		it("should delete single char when not after symbol", function()
+			-- Start at col 5 ('y')
+			vim.api.nvim_win_set_cursor(0, { 1, 5 })
+			motions.delete_char_before()
+
+			local line = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1]
+			-- space before 'y' should be deleted
+			assert.equals("x ->y", line)
+		end)
+	end)
+
 	describe("keymaps", function()
 		it("should setup keymaps for buffer", function()
 			motions.setup_keymaps(buf)
 
 			-- Check that keymaps exist
 			local keymaps = vim.api.nvim_buf_get_keymap(buf, "n")
-			local has_l = false
-			local has_h = false
+			local expected = { "l", "h", "w", "b", "e", "x", "X" }
+			local found = {}
 
 			for _, map in ipairs(keymaps) do
-				if map.lhs == "l" then
-					has_l = true
-				end
-				if map.lhs == "h" then
-					has_h = true
+				for _, key in ipairs(expected) do
+					if map.lhs == key then
+						found[key] = true
+					end
 				end
 			end
 
-			assert.is_true(has_l, "l keymap should be set")
-			assert.is_true(has_h, "h keymap should be set")
+			for _, key in ipairs(expected) do
+				assert.is_true(found[key], key .. " keymap should be set")
+			end
 
 			-- Cleanup
 			motions.remove_keymaps(buf)
@@ -239,20 +418,20 @@ describe("sigil.motions", function()
 			motions.remove_keymaps(buf)
 
 			local keymaps = vim.api.nvim_buf_get_keymap(buf, "n")
-			local has_l = false
-			local has_h = false
+			local expected = { "l", "h", "w", "b", "e", "x", "X" }
+			local found = {}
 
 			for _, map in ipairs(keymaps) do
-				if map.lhs == "l" then
-					has_l = true
-				end
-				if map.lhs == "h" then
-					has_h = true
+				for _, key in ipairs(expected) do
+					if map.lhs == key then
+						found[key] = true
+					end
 				end
 			end
 
-			assert.is_false(has_l, "l keymap should be removed")
-			assert.is_false(has_h, "h keymap should be removed")
+			for _, key in ipairs(expected) do
+				assert.is_falsy(found[key], key .. " keymap should be removed")
+			end
 		end)
 	end)
 end)
