@@ -42,6 +42,12 @@ For headless testing, use extmark inspection instead.
 Emacs implementation ties into font-lock (syntax highlighting system).
 Neovim equivalent is using TextChanged autocmds + manual extmark management.
 
+### Headless buffer numbering
+In headless mode (`nvim --headless`), `vim.api.nvim_get_current_buf()` returns 1, not 0.
+Tests that use buffer 0 explicitly may fail because extmarks are created in buffer 0
+but `move_right()`/`move_left()` use the current buffer (1).
+**Solution:** Always use `vim.api.nvim_get_current_buf()` in tests instead of hardcoded buffer numbers.
+
 ---
 
 ## Reference Code Locations

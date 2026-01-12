@@ -28,8 +28,8 @@ Create a Neovim plugin that visually replaces text patterns with Unicode symbols
   - [x] 3.5 Write tests for predicate system
 
 - [ ] Phase 4: Atomic Symbol Motions
-  - [ ] 4.1 Create module for cursor position detection on prettified symbols
-  - [ ] 4.2 Implement motion remaps (`l`, `h`) to skip over entire symbol
+  - [x] 4.1 Create module for cursor position detection on prettified symbols
+  - [x] 4.2 Implement motion remaps (`l`, `h`) to skip over entire symbol
   - [ ] 4.3 Implement word motions (`w`, `b`, `e`) awareness of symbol boundaries
   - [ ] 4.4 Implement delete (`x`, `X`) to delete entire prettified symbol
   - [ ] 4.5 Implement change (`s`, `c`) to replace entire prettified symbol

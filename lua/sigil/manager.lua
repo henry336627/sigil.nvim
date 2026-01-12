@@ -3,6 +3,7 @@
 local config = require("sigil.config")
 local state = require("sigil.state")
 local prettify = require("sigil.prettify")
+local motions = require("sigil.motions")
 
 local M = {}
 
@@ -37,6 +38,11 @@ function M.attach(buf)
 	-- Initial prettification
 	prettify.prettify_buffer(buf)
 
+	-- Setup atomic motions if enabled
+	if config.current.atomic_motions then
+		motions.setup_keymaps(buf)
+	end
+
 	-- Setup buffer-local autocmds
 	M.setup_buffer_autocmds(buf)
 end
@@ -44,6 +50,11 @@ end
 ---Detach from a buffer
 ---@param buf integer
 function M.detach(buf)
+	-- Remove atomic motions keymaps
+	if config.current.atomic_motions then
+		motions.remove_keymaps(buf)
+	end
+
 	state.detach(buf)
 end
 

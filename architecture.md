@@ -18,7 +18,8 @@ sigil/
 │       ├── extmark.lua     # Extmark wrapper (create/delete/update)
 │       ├── prettify.lua    # Core prettification logic
 │       ├── unprettify.lua  # Cursor tracking, show original at point
-│       └── predicate.lua   # Context predicates (skip strings/comments)
+│       ├── predicate.lua   # Context predicates (skip strings/comments)
+│       └── motions.lua     # Atomic symbol motions (h/l skip symbols)
 ├── tests/
 │   ├── minimal_init.lua    # Test environment setup
 │   ├── smoke.lua           # Quick smoke test
@@ -140,6 +141,21 @@ sigil/
 - Context detection strategy:
   1. If Tree-sitter parser available for buffer filetype → use TS queries
   2. Else fallback to `vim.treesitter.get_captures_at_pos()` or syntax API
+
+### Module: motions.lua
+- Purpose: Atomic symbol motions (prettified symbols behave as single chars)
+- Exports:
+  - `get_symbol_at(buf, row, col)` — get extmark info at position
+  - `get_next_symbol(buf, row, col)` — find next symbol after position
+  - `get_prev_symbol(buf, row, col)` — find previous symbol before position
+  - `move_right()` — move cursor right, skipping over entire symbol
+  - `move_left()` — move cursor left, skipping over entire symbol
+  - `setup_keymaps(buf)` — setup h/l keymaps for buffer
+  - `remove_keymaps(buf)` — remove h/l keymaps from buffer
+- Logic:
+  - On `l`: if on symbol, jump to end; else normal movement
+  - On `h`: if inside or after symbol, jump to start; else normal movement
+- Configuration: `atomic_motions` option (default: true)
 
 ## Data Flow
 

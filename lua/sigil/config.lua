@@ -13,6 +13,7 @@ local M = {}
 ---@field filetype_predicates? table<string, fun(ctx: sigil.MatchContext): boolean> Per-filetype predicates
 ---@field skip_strings? boolean Skip prettification inside strings (default: true)
 ---@field skip_comments? boolean Skip prettification inside comments (default: true)
+---@field atomic_motions? boolean Treat prettified symbols as single chars for h/l (default: true)
 
 ---Default configuration
 ---@type sigil.Config
@@ -83,6 +84,7 @@ M.default = {
 	filetype_predicates = {}, -- per-filetype custom predicates
 	skip_strings = true, -- skip prettification inside strings
 	skip_comments = true, -- skip prettification inside comments
+	atomic_motions = true, -- treat prettified symbols as single chars for h/l
 }
 
 ---Current merged configuration
