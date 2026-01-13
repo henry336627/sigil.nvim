@@ -63,6 +63,7 @@ Create a Neovim plugin that visually replaces text patterns with Unicode symbols
 
 ## Blocked / Open Questions
 - [ ] Multi-character replacement display (compose vs single char)?
+- [ ] Visual selection highlight on prettified symbols (conceal doesn't show selection)
 
 ## Decisions Made
 - Use extmarks with `conceal` option for symbol replacement (standard Neovim approach)

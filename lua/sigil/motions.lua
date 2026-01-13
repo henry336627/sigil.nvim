@@ -596,21 +596,15 @@ function M.visual_move_right()
 	local symbol = M.get_symbol_at(buf, row, col)
 
 	if symbol then
-		-- Move to end of symbol
+		-- On a symbol: move past it (to end_col)
 		if symbol.end_col < #line then
 			vim.api.nvim_win_set_cursor(0, { row + 1, symbol.end_col })
 		else
 			vim.cmd("normal! l")
 		end
 	else
-		-- Check if next position is a prettified symbol
-		local next_symbol = M.get_symbol_at(buf, row, col + 1)
-		if next_symbol then
-			-- Move to end of that symbol
-			vim.api.nvim_win_set_cursor(0, { row + 1, next_symbol.end_col - 1 })
-		else
-			vim.cmd("normal! l")
-		end
+		-- Not on a symbol: normal movement (will land on symbol start if next char is symbol)
+		vim.cmd("normal! l")
 	end
 end
 
