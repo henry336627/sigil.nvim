@@ -5,6 +5,234 @@ local state = require("sigil.state")
 
 local M = {}
 
+---Get extmarks for a line, sorted by start column
+---@param buf integer
+---@param row integer
+---@return table[]
+local function get_line_marks(buf, row)
+	local marks = vim.api.nvim_buf_get_extmarks(buf, state.ns, { row, 0 }, { row, -1 }, { details = true })
+	local result = {}
+	for _, mark in ipairs(marks) do
+		local start_col = mark[3]
+		local end_col = mark[4].end_col or (start_col + 1)
+		if end_col > start_col then
+			table.insert(result, { start_col = start_col, end_col = end_col })
+		end
+	end
+	table.sort(result, function(a, b)
+		return a.start_col < b.start_col
+	end)
+	return result
+end
+
+---Get display width for a substring (tabs + multibyte aware)
+---@param str string
+---@return integer
+local function display_width(str)
+	if str == "" then
+		return 0
+	end
+	return vim.fn.strdisplaywidth(str)
+end
+
+---If column is inside a symbol, snap to its start
+---@param col integer
+---@param marks table[]
+---@return integer
+local function snap_col_to_symbol(col, marks)
+	for _, mark in ipairs(marks) do
+		if col >= mark.start_col and col < mark.end_col then
+			return mark.start_col
+		end
+	end
+	return col
+end
+
+---Get display column (conceal-aware) for a byte column
+---@param line string
+---@param col integer
+---@param marks table[]
+---@return integer
+local function display_col_for_byte(line, col, marks)
+	if line == "" then
+		return 0
+	end
+
+	local line_len = #line
+	col = math.max(0, math.min(col, line_len))
+
+	local disp = 0
+	local byte_idx = 0
+
+	for _, mark in ipairs(marks) do
+		if col <= mark.start_col then
+			local segment = line:sub(byte_idx + 1, col)
+			disp = disp + display_width(segment)
+			return disp
+		end
+
+		local segment = line:sub(byte_idx + 1, mark.start_col)
+		disp = disp + display_width(segment)
+
+		if col < mark.end_col then
+			-- Inside concealed region: cursor displays at start
+			return disp
+		end
+
+		disp = disp + 1
+		byte_idx = mark.end_col
+	end
+
+	local segment = line:sub(byte_idx + 1, col)
+	disp = disp + display_width(segment)
+	return disp
+end
+
+---Find byte offset in a segment for a display offset
+---@param segment string
+---@param desired_disp integer
+---@return integer
+local function byte_offset_for_display(segment, desired_disp)
+	if desired_disp <= 0 or segment == "" then
+		return 0
+	end
+
+	local char_count = vim.fn.strchars(segment)
+	local disp = 0
+	local byte_off = 0
+
+	for i = 0, char_count - 1 do
+		local ch = vim.fn.strcharpart(segment, i, 1)
+		local w = display_width(ch)
+		if disp + w > desired_disp then
+			return byte_off
+		end
+		disp = disp + w
+		byte_off = byte_off + #ch
+	end
+
+	return byte_off
+end
+
+---Map a display column (conceal-aware) to a byte column
+---@param line string
+---@param desired_disp integer
+---@param marks table[]
+---@return integer
+local function byte_col_for_display(line, desired_disp, marks)
+	if line == "" then
+		return 0
+	end
+
+	local line_len = #line
+	if desired_disp <= 0 then
+		return 0
+	end
+
+	local byte_idx = 0
+
+	for _, mark in ipairs(marks) do
+		local segment = line:sub(byte_idx + 1, mark.start_col)
+		local seg_width = display_width(segment)
+
+		if desired_disp <= seg_width then
+			local off = byte_offset_for_display(segment, desired_disp)
+			return math.max(0, math.min(line_len - 1, byte_idx + off))
+		end
+
+		desired_disp = desired_disp - seg_width
+
+		-- Concealed region occupies one cell
+		if desired_disp <= 1 then
+			return math.max(0, math.min(line_len - 1, mark.start_col))
+		end
+
+		desired_disp = desired_disp - 1
+		byte_idx = mark.end_col
+	end
+
+	local tail = line:sub(byte_idx + 1)
+	local off = byte_offset_for_display(tail, desired_disp)
+	return math.max(0, math.min(line_len - 1, byte_idx + off))
+end
+
+---Get conceal-aware display column for current cursor position
+---@param buf integer
+---@param row integer
+---@param col integer
+---@return integer
+function M.get_display_col(buf, row, col)
+	local line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1] or ""
+	local marks = get_line_marks(buf, row)
+	local snapped = snap_col_to_symbol(col, marks)
+	return display_col_for_byte(line, snapped, marks)
+end
+
+---Get byte column for a desired display column on a target line
+---@param buf integer
+---@param row integer
+---@param desired_disp integer
+---@return integer
+function M.get_byte_col_for_display(buf, row, desired_disp)
+	local line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1] or ""
+	local marks = get_line_marks(buf, row)
+	return byte_col_for_display(line, desired_disp, marks)
+end
+
+---Move cursor vertically while preserving byte column (not screen column)
+---@param delta integer -1 for up, 1 for down
+function M.move_vertical(delta)
+	local buf = vim.api.nvim_get_current_buf()
+	local cursor = vim.api.nvim_win_get_cursor(0)
+	local row = cursor[1] - 1
+	local col = cursor[2]
+
+	local desired_disp = vim.w.sigil_curswant_disp
+	if desired_disp == nil then
+		desired_disp = M.get_display_col(buf, row, col)
+		vim.w.sigil_curswant_disp = desired_disp
+	end
+
+	local count = vim.v.count1
+	vim.w.sigil_vert_active = true
+	local mode = vim.fn.mode()
+	if mode == "v" or mode == "V" or mode == "\22" then
+		local key = delta > 0 and "j" or "k"
+		local keys = vim.api.nvim_replace_termcodes(tostring(count) .. key, true, false, true)
+		vim.api.nvim_feedkeys(keys, "nx", false)
+	else
+		if delta > 0 then
+			vim.cmd("normal! " .. count .. "j")
+		else
+			vim.cmd("normal! " .. count .. "k")
+		end
+	end
+
+	local new_cursor = vim.api.nvim_win_get_cursor(0)
+	if new_cursor[1] == cursor[1] and new_cursor[2] == cursor[2] then
+		vim.w.sigil_vert_active = false
+		return
+	end
+
+	local target_row = new_cursor[1] - 1
+	local target_col = M.get_byte_col_for_display(buf, target_row, desired_disp)
+
+	if target_col ~= new_cursor[2] then
+		vim.w.sigil_vert_active = true
+		vim.api.nvim_win_set_cursor(0, { target_row + 1, target_col })
+	end
+end
+
+---Move cursor down (j) preserving byte column
+function M.move_down()
+	M.move_vertical(1)
+end
+
+---Move cursor up (k) preserving byte column
+function M.move_up()
+	M.move_vertical(-1)
+end
+
 ---Extract replacement character from extmark details
 ---@param details table Extmark details
 ---@return string|nil Replacement character
@@ -876,6 +1104,8 @@ function M.setup_keymaps(buf)
 	-- Character motions (normal mode)
 	vim.keymap.set("n", "l", M.move_right, opts)
 	vim.keymap.set("n", "h", M.move_left, opts)
+	vim.keymap.set("n", "j", M.move_down, opts)
+	vim.keymap.set("n", "k", M.move_up, opts)
 
 	-- Word motions (normal mode)
 	vim.keymap.set("n", "w", M.move_word_forward, opts)
@@ -896,6 +1126,8 @@ function M.setup_keymaps(buf)
 	vim.keymap.set("x", "w", M.visual_move_word_forward, opts)
 	vim.keymap.set("x", "b", M.visual_move_word_backward, opts)
 	vim.keymap.set("x", "e", M.visual_move_word_end, opts)
+	vim.keymap.set("x", "j", M.move_down, opts)
+	vim.keymap.set("x", "k", M.move_up, opts)
 end
 
 ---Remove keymaps for atomic symbol motions
@@ -904,6 +1136,8 @@ function M.remove_keymaps(buf)
 	-- Character motions (normal mode)
 	pcall(vim.keymap.del, "n", "l", { buffer = buf })
 	pcall(vim.keymap.del, "n", "h", { buffer = buf })
+	pcall(vim.keymap.del, "n", "j", { buffer = buf })
+	pcall(vim.keymap.del, "n", "k", { buffer = buf })
 
 	-- Word motions (normal mode)
 	pcall(vim.keymap.del, "n", "w", { buffer = buf })
@@ -924,6 +1158,8 @@ function M.remove_keymaps(buf)
 	pcall(vim.keymap.del, "x", "w", { buffer = buf })
 	pcall(vim.keymap.del, "x", "b", { buffer = buf })
 	pcall(vim.keymap.del, "x", "e", { buffer = buf })
+	pcall(vim.keymap.del, "x", "j", { buffer = buf })
+	pcall(vim.keymap.del, "x", "k", { buffer = buf })
 end
 
 return M

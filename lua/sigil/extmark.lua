@@ -12,11 +12,29 @@ local M = {}
 ---@param replacement string Single character to display
 ---@return integer|nil Extmark ID or nil on failure
 function M.create(buf, row, col, end_col, replacement)
-	local ok, id = pcall(vim.api.nvim_buf_set_extmark, buf, state.ns, row, col, {
+	local opts = {
 		end_col = end_col,
-		conceal = replacement,
+		-- Hide original text; render replacement via virt_text so Visual highlight can combine.
+		-- Use a single-space conceal so the replacement still occupies one cell.
+		conceal = " ",
+		-- No explicit highlight: lets Visual selection background show through.
+		virt_text = { { replacement } },
+		virt_text_pos = "overlay",
+		virt_text_hide = true,
+		hl_mode = "combine",
 		priority = 100,
-	})
+	}
+
+	local ok, id = pcall(vim.api.nvim_buf_set_extmark, buf, state.ns, row, col, opts)
+
+	if not ok then
+		-- Fallback for older Neovim versions that don't support overlay virt_text.
+		ok, id = pcall(vim.api.nvim_buf_set_extmark, buf, state.ns, row, col, {
+			end_col = end_col,
+			conceal = replacement,
+			priority = 100,
+		})
+	end
 
 	if ok then
 		state.add_mark(buf, row, id)

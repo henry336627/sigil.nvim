@@ -52,6 +52,11 @@ function M.detach(buf)
 
 	-- Clear all extmarks
 	vim.api.nvim_buf_clear_namespace(buf, M.ns, 0, -1)
+	-- Clear visual overlay marks (if module available)
+	local ok, visual = pcall(require, "sigil.visual")
+	if ok then
+		visual.clear(buf)
+	end
 
 	M.buffers[buf] = nil
 end
@@ -74,6 +79,11 @@ function M.disable(buf)
 		-- Clear extmarks when disabled
 		vim.api.nvim_buf_clear_namespace(buf, M.ns, 0, -1)
 		state.marks = {}
+		-- Clear visual overlay marks (if module available)
+		local ok, visual = pcall(require, "sigil.visual")
+		if ok then
+			visual.clear(buf)
+		end
 	end
 end
 

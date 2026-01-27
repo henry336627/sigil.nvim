@@ -4,6 +4,7 @@ local config = require("sigil.config")
 local state = require("sigil.state")
 local prettify = require("sigil.prettify")
 local motions = require("sigil.motions")
+local visual = require("sigil.visual")
 
 local M = {}
 
@@ -55,6 +56,9 @@ function M.detach(buf)
 		motions.remove_keymaps(buf)
 	end
 
+	-- Clear visual overlays
+	visual.clear(buf)
+
 	state.detach(buf)
 end
 
@@ -100,6 +104,22 @@ function M.setup_buffer_autocmds(buf)
 		callback = function()
 			if state.is_attached(buf) then
 				M.setup_conceal(buf)
+			end
+		end,
+	})
+
+	-- Update visual overlays while selecting
+	vim.api.nvim_create_autocmd({ "ModeChanged", "CursorMoved" }, {
+		group = M.augroup,
+		buffer = buf,
+		callback = function()
+			visual.update(buf)
+			-- Maintain desired byte column for vertical motions.
+			local cursor = vim.api.nvim_win_get_cursor(0)
+			if vim.w.sigil_vert_active then
+				vim.w.sigil_vert_active = false
+			else
+				vim.w.sigil_curswant_disp = motions.get_display_col(buf, cursor[1] - 1, cursor[2])
 			end
 		end,
 	})
