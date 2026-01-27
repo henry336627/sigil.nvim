@@ -6,6 +6,12 @@ describe("sigil.motions", function()
 	local prettify
 	local buf
 
+	-- Test symbols (not dependent on default config)
+	local test_symbols = {
+		["lambda"] = "λ",
+		["->"] = "→",
+	}
+
 	before_each(function()
 		-- Clear module cache
 		package.loaded["sigil.motions"] = nil
@@ -19,7 +25,7 @@ describe("sigil.motions", function()
 		state = require("sigil.state")
 		prettify = require("sigil.prettify")
 
-		config.setup({})
+		config.setup({ symbols = test_symbols })
 
 		-- Use current buffer
 		buf = vim.api.nvim_get_current_buf()

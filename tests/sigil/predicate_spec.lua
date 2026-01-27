@@ -91,6 +91,12 @@ describe("sigil.prettify with predicates", function()
 	local state
 	local predicate
 
+	-- Test symbols (not dependent on default config)
+	local test_symbols = {
+		["lambda"] = "λ",
+		["->"] = "→",
+	}
+
 	before_each(function()
 		package.loaded["sigil.prettify"] = nil
 		package.loaded["sigil.config"] = nil
@@ -103,7 +109,7 @@ describe("sigil.prettify with predicates", function()
 		state = require("sigil.state")
 		predicate = require("sigil.predicate")
 
-		config.setup({})
+		config.setup({ symbols = test_symbols })
 	end)
 
 	after_each(function()
@@ -118,7 +124,7 @@ describe("sigil.prettify with predicates", function()
 			state.attach(0)
 
 			-- Use predicate that always returns false
-			prettify.prettify_line(0, 0, "lambda -> x", config.default.symbols, predicate.never)
+			prettify.prettify_line(0, 0, "lambda -> x", test_symbols, predicate.never)
 
 			local marks = vim.api.nvim_buf_get_extmarks(0, state.ns, 0, -1, { details = true })
 			assert.equals(0, #marks)
@@ -129,7 +135,7 @@ describe("sigil.prettify with predicates", function()
 			state.attach(0)
 
 			-- Use predicate that always returns true
-			prettify.prettify_line(0, 0, "lambda -> x", config.default.symbols, predicate.always)
+			prettify.prettify_line(0, 0, "lambda -> x", test_symbols, predicate.always)
 
 			local marks = vim.api.nvim_buf_get_extmarks(0, state.ns, 0, -1, { details = true })
 			assert.is_true(#marks >= 2) -- lambda and ->
@@ -145,7 +151,7 @@ describe("sigil.prettify with predicates", function()
 				return true
 			end
 
-			prettify.prettify_line(0, 0, "lambda", config.default.symbols, custom_pred)
+			prettify.prettify_line(0, 0, "lambda", test_symbols, custom_pred)
 
 			assert.is_not_nil(received_ctx)
 			assert.equals(0, received_ctx.buf)
@@ -165,7 +171,7 @@ describe("sigil.prettify with predicates", function()
 				return ctx.pattern == "->"
 			end
 
-			prettify.prettify_line(0, 0, "lambda -> x", config.default.symbols, only_arrows)
+			prettify.prettify_line(0, 0, "lambda -> x", test_symbols, only_arrows)
 
 			local marks = vim.api.nvim_buf_get_extmarks(0, state.ns, 0, -1, { details = true })
 			assert.equals(1, #marks)
@@ -256,5 +262,61 @@ describe("sigil.config predicates", function()
 			local pred = config.get_predicate("lua")
 			assert.is_function(pred)
 		end)
+	end)
+end)
+
+describe("sigil.config contexts", function()
+	local config
+
+	before_each(function()
+		package.loaded["sigil.config"] = nil
+		config = require("sigil.config")
+	end)
+
+	it("should respect math_only and text_only symbols with context predicate", function()
+		config.setup({
+			predicate = function()
+				return true
+			end,
+			filetype_symbol_contexts = {
+				lua = {
+					math_only = { "->" },
+					text_only = { "lambda" },
+				},
+			},
+			filetype_context_predicates = {
+				lua = function(ctx)
+					return ctx.col == 0
+				end,
+			},
+		})
+
+		local pred = config.get_predicate("lua")
+
+		local math_ctx = {
+			buf = 0,
+			row = 0,
+			col = 0,
+			end_col = 2,
+			pattern = "->",
+			replacement = "→",
+		}
+		assert.is_true(pred(math_ctx))
+
+		math_ctx.col = 1
+		assert.is_false(pred(math_ctx))
+
+		local text_ctx = {
+			buf = 0,
+			row = 0,
+			col = 0,
+			end_col = 6,
+			pattern = "lambda",
+			replacement = "λ",
+		}
+		assert.is_false(pred(text_ctx))
+
+		text_ctx.col = 1
+		assert.is_true(pred(text_ctx))
 	end)
 end)

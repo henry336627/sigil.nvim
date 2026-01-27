@@ -3,6 +3,13 @@ describe("sigil.prettify", function()
 	local prettify
 	local config
 
+	-- Test symbols (not dependent on default config)
+	local test_symbols = {
+		["lambda"] = "λ",
+		["->"] = "→",
+		["!="] = "≠",
+	}
+
 	before_each(function()
 		package.loaded["sigil.prettify"] = nil
 		package.loaded["sigil.config"] = nil
@@ -11,12 +18,12 @@ describe("sigil.prettify", function()
 
 		prettify = require("sigil.prettify")
 		config = require("sigil.config")
-		config.setup({})
+		config.setup({ symbols = test_symbols })
 	end)
 
 	describe("find_matches", function()
 		it("should find single symbol", function()
-			local matches = prettify.find_matches("lambda", config.default.symbols)
+			local matches = prettify.find_matches("lambda", test_symbols)
 
 			assert.equals(1, #matches)
 			assert.equals(0, matches[1].col)
@@ -25,7 +32,7 @@ describe("sigil.prettify", function()
 		end)
 
 		it("should find multiple symbols on same line", function()
-			local matches = prettify.find_matches("lambda -> x", config.default.symbols)
+			local matches = prettify.find_matches("lambda -> x", test_symbols)
 
 			assert.equals(2, #matches)
 			-- First match: lambda
@@ -35,28 +42,28 @@ describe("sigil.prettify", function()
 		end)
 
 		it("should respect word boundaries for alphabetic patterns", function()
-			local matches = prettify.find_matches("xlambda lambday", config.default.symbols)
+			local matches = prettify.find_matches("xlambda lambday", test_symbols)
 
 			-- Neither should match (lambda is part of larger word)
 			assert.equals(0, #matches)
 		end)
 
 		it("should match standalone word", function()
-			local matches = prettify.find_matches("x lambda y", config.default.symbols)
+			local matches = prettify.find_matches("x lambda y", test_symbols)
 
 			assert.equals(1, #matches)
 			assert.equals("λ", matches[1].replacement)
 		end)
 
 		it("should handle operator symbols without word boundary", function()
-			local matches = prettify.find_matches("x->y", config.default.symbols)
+			local matches = prettify.find_matches("x->y", test_symbols)
 
 			assert.equals(1, #matches)
 			assert.equals("→", matches[1].replacement)
 		end)
 
 		it("should handle multiple occurrences", function()
-			local matches = prettify.find_matches("x -> y -> z", config.default.symbols)
+			local matches = prettify.find_matches("x -> y -> z", test_symbols)
 
 			assert.equals(2, #matches)
 			assert.equals("→", matches[1].replacement)
@@ -87,12 +94,12 @@ describe("sigil.prettify", function()
 		end)
 
 		it("should handle empty line", function()
-			local matches = prettify.find_matches("", config.default.symbols)
+			local matches = prettify.find_matches("", test_symbols)
 			assert.equals(0, #matches)
 		end)
 
 		it("should handle line with no matches", function()
-			local matches = prettify.find_matches("hello world", config.default.symbols)
+			local matches = prettify.find_matches("hello world", test_symbols)
 			assert.equals(0, #matches)
 		end)
 	end)

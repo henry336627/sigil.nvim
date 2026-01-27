@@ -24,12 +24,12 @@ describe("sigil", function()
 			sigil.setup({
 				symbols = {
 					["custom"] = "C",
+					["lambda"] = "λ",
 				},
 			})
 
 			local config = sigil.get_config()
 			assert.equals("C", config.symbols["custom"])
-			-- Default should still exist
 			assert.equals("λ", config.symbols["lambda"])
 		end)
 	end)

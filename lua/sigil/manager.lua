@@ -36,8 +36,20 @@ function M.attach(buf)
 	-- Set conceal options for buffer window(s)
 	M.setup_conceal(buf)
 
-	-- Initial prettification
+	-- Initial prettification (may be incomplete if treesitter not ready)
 	prettify.prettify_buffer(buf)
+
+	-- Delayed re-prettify after forcing treesitter parse
+	vim.defer_fn(function()
+		if vim.api.nvim_buf_is_valid(buf) and state.is_enabled(buf) then
+			-- Force treesitter to parse if available
+			local ok, parser = pcall(vim.treesitter.get_parser, buf)
+			if ok and parser then
+				pcall(function() parser:parse() end)
+			end
+			prettify.refresh(buf)
+		end
+	end, 50)
 
 	-- Setup atomic motions if enabled
 	if config.current.atomic_motions then

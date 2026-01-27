@@ -7,6 +7,12 @@ vim.opt.runtimepath:prepend(vim.fn.getcwd())
 print("=== sigil.nvim smoke test ===")
 print("")
 
+-- Test symbols for smoke tests
+local test_symbols = {
+	["lambda"] = "λ",
+	["->"] = "→",
+}
+
 -- Test 1: Module loads
 local ok, sigil = pcall(require, "sigil")
 if not ok then
@@ -32,12 +38,13 @@ if not config_ok then
 end
 print("OK: sigil.config loaded")
 
--- Test 4: Default symbols exist
-if not config.default.symbols["lambda"] then
-	print("FAIL: default symbol 'lambda' not found")
+-- Test 4: Config setup works
+config.setup({ symbols = test_symbols })
+if config.current.symbols["lambda"] ~= "λ" then
+	print("FAIL: config setup did not apply symbols")
 	vim.cmd("cq 1")
 end
-print("OK: default symbols exist")
+print("OK: config setup works")
 
 -- Test 5: Prettify module loads
 local prettify_ok, prettify = pcall(require, "sigil.prettify")
@@ -49,7 +56,7 @@ end
 print("OK: sigil.prettify loaded")
 
 -- Test 6: Pattern matching works
-local matches = prettify.find_matches("lambda -> x", config.default.symbols)
+local matches = prettify.find_matches("lambda -> x", test_symbols)
 if #matches < 2 then
 	print("FAIL: expected at least 2 matches, got " .. #matches)
 	vim.cmd("cq 1")
@@ -85,8 +92,8 @@ vim.api.nvim_buf_set_lines(0, 0, -1, false, {
 	"end",
 })
 
--- Setup config
-config.setup({})
+-- Setup config with test symbols
+config.setup({ symbols = test_symbols })
 
 -- Attach and prettify
 state.attach(0)
