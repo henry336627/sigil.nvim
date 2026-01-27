@@ -760,6 +760,13 @@ function M.change_operator()
 	return "g@"
 end
 
+---Change current line (restore built-in cc behavior)
+function M.change_line()
+	local count = vim.v.count1
+	local keys = vim.api.nvim_replace_termcodes(tostring(count) .. "cc", true, false, true)
+	vim.api.nvim_feedkeys(keys, "nt", false)
+end
+
 -- ============================================
 -- Visual Mode Support (4.6)
 -- ============================================
@@ -1119,6 +1126,7 @@ function M.setup_keymaps(buf)
 	-- Change operations
 	vim.keymap.set("n", "s", M.substitute_char, opts)
 	vim.keymap.set("n", "c", M.change_operator, { buffer = buf, silent = true, expr = true })
+	vim.keymap.set("n", "cc", M.change_line, opts)
 
 	-- Visual mode motions (4.6)
 	vim.keymap.set("x", "l", M.visual_move_right, opts)
@@ -1151,6 +1159,7 @@ function M.remove_keymaps(buf)
 	-- Change operations
 	pcall(vim.keymap.del, "n", "s", { buffer = buf })
 	pcall(vim.keymap.del, "n", "c", { buffer = buf })
+	pcall(vim.keymap.del, "n", "cc", { buffer = buf })
 
 	-- Visual mode motions (4.6)
 	pcall(vim.keymap.del, "x", "l", { buffer = buf })

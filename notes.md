@@ -38,6 +38,10 @@
 Found during testing that `nvim__screenshot` only works when UI is attached.
 For headless testing, use extmark inspection instead.
 
+### Typst math context requires Tree-sitter parser
+Math-only prettification for Typst relies on Tree-sitter. Ensure Typst parser is installed:
+`:TSInstall typst`
+
 ### Emacs prettify uses font-lock
 Emacs implementation ties into font-lock (syntax highlighting system).
 Neovim equivalent is using TextChanged autocmds + manual extmark management.
