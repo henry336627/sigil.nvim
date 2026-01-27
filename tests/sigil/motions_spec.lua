@@ -364,6 +364,22 @@ describe("sigil.motions", function()
 			-- 'x' should be deleted
 			assert.equals(" -> y", line)
 		end)
+
+		it("should keep other symbols prettified on the same line", function()
+			vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "x -> y -> z" })
+			prettify.prettify_buffer(buf)
+
+			-- Delete first symbol
+			vim.api.nvim_win_set_cursor(0, { 1, 2 })
+			motions.delete_char()
+
+			local line = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1]
+			local start = line:find("->", 1, true)
+			assert.is_not_nil(start)
+
+			local symbol = motions.get_symbol_at(buf, 0, start - 1)
+			assert.is_not_nil(symbol)
+		end)
 	end)
 
 	describe("delete_char_before", function()
@@ -391,6 +407,40 @@ describe("sigil.motions", function()
 			local line = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1]
 			-- space before 'y' should be deleted
 			assert.equals("x ->y", line)
+		end)
+	end)
+
+	describe("insert_backspace", function()
+		before_each(function()
+			vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "x -> y" })
+			state.attach(buf)
+			prettify.prettify_buffer(buf)
+		end)
+
+		it("should return repeated <BS> when immediately after symbol", function()
+			-- Start at col 4 (space after '->')
+			vim.api.nvim_win_set_cursor(0, { 1, 4 })
+			local res = motions.insert_backspace()
+
+			assert.equals("<BS><BS>", res)
+		end)
+
+		it("should return <BS><Del> when cursor is inside symbol", function()
+			-- Start inside '->' at col 3 (on '>')
+			vim.api.nvim_win_set_cursor(0, { 1, 3 })
+			local res = motions.insert_backspace()
+
+			assert.equals("<BS><Del>", res)
+		end)
+
+		it("should return <BS> when not after symbol", function()
+			-- Start at col 5 ('y')
+			vim.api.nvim_win_set_cursor(0, { 1, 5 })
+			local res = motions.insert_backspace()
+
+			local line = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1]
+			assert.equals("x -> y", line)
+			assert.equals("<BS>", res)
 		end)
 	end)
 
@@ -506,6 +556,16 @@ describe("sigil.motions", function()
 				assert.is_true(found[key], key .. " keymap should be set")
 			end
 
+			local imaps = vim.api.nvim_buf_get_keymap(buf, "i")
+			local has_bs = false
+			for _, map in ipairs(imaps) do
+				if map.lhs == "<BS>" then
+					has_bs = true
+					break
+				end
+			end
+			assert.is_true(has_bs, "<BS> keymap should be set")
+
 			-- Cleanup
 			motions.remove_keymaps(buf)
 		end)
@@ -529,6 +589,16 @@ describe("sigil.motions", function()
 			for _, key in ipairs(expected) do
 				assert.is_falsy(found[key], key .. " keymap should be removed")
 			end
+
+			local imaps = vim.api.nvim_buf_get_keymap(buf, "i")
+			local has_bs = false
+			for _, map in ipairs(imaps) do
+				if map.lhs == "<BS>" then
+					has_bs = true
+					break
+				end
+			end
+			assert.is_falsy(has_bs, "<BS> keymap should be removed")
 		end)
 	end)
 end)

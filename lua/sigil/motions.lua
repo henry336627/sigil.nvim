@@ -635,14 +635,11 @@ function M.delete_char()
 	local symbol = M.get_symbol_at(buf, row, col)
 
 	if symbol then
-		-- Delete the entire symbol text
-		local line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1]
-		local new_line = line:sub(1, symbol.start_col) .. line:sub(symbol.end_col + 1)
-		vim.api.nvim_buf_set_lines(buf, row, row + 1, false, { new_line })
+		-- Delete the entire symbol text without replacing the whole line
+		pcall(vim.api.nvim_buf_del_extmark, buf, state.ns, symbol.id)
+		vim.api.nvim_buf_set_text(buf, row, symbol.start_col, row, symbol.end_col, { "" })
 		-- Cursor stays at symbol.start_col or adjusts if at end of line
-		local new_col = math.min(symbol.start_col, #new_line - 1)
-		new_col = math.max(0, new_col)
-		vim.api.nvim_win_set_cursor(0, { row + 1, new_col })
+		vim.api.nvim_win_set_cursor(0, { row + 1, symbol.start_col })
 	else
 		-- Normal delete
 		vim.cmd("normal! x")
@@ -666,10 +663,9 @@ function M.delete_char_before()
 	local symbol = M.get_symbol_at(buf, row, col - 1)
 
 	if symbol then
-		-- Delete the entire symbol text
-		local line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1]
-		local new_line = line:sub(1, symbol.start_col) .. line:sub(symbol.end_col + 1)
-		vim.api.nvim_buf_set_lines(buf, row, row + 1, false, { new_line })
+		-- Delete the entire symbol text without replacing the whole line
+		pcall(vim.api.nvim_buf_del_extmark, buf, state.ns, symbol.id)
+		vim.api.nvim_buf_set_text(buf, row, symbol.start_col, row, symbol.end_col, { "" })
 		-- Move cursor to where symbol started
 		local new_col = math.max(0, symbol.start_col)
 		vim.api.nvim_win_set_cursor(0, { row + 1, new_col })
@@ -677,6 +673,34 @@ function M.delete_char_before()
 		-- Normal delete before
 		vim.cmd("normal! X")
 	end
+end
+
+---Backspace in insert mode: delete entire prettified symbol before cursor
+---@return string
+function M.insert_backspace()
+	local buf = vim.api.nvim_get_current_buf()
+	local cursor = vim.api.nvim_win_get_cursor(0)
+	local row = cursor[1] - 1 -- 0-indexed
+	local col = cursor[2] -- 0-indexed
+
+	if col == 0 then
+		return "<BS>"
+	end
+
+	-- Check if character before cursor is part of a prettified symbol
+	local symbol = M.get_symbol_at(buf, row, col - 1)
+
+	if symbol then
+		-- Return key sequence to delete full symbol without buffer edits in textlock
+		local line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1] or ""
+		local left = line:sub(symbol.start_col + 1, col)
+		local right = line:sub(col + 1, symbol.end_col)
+		local left_chars = vim.fn.strchars(left)
+		local right_chars = vim.fn.strchars(right)
+		return string.rep("<BS>", left_chars) .. string.rep("<Del>", right_chars)
+	end
+
+	return "<BS>"
 end
 
 ---Substitute character under cursor (or entire prettified symbol) and enter insert mode
@@ -691,9 +715,8 @@ function M.substitute_char()
 
 	if symbol then
 		-- Delete the entire symbol text and enter insert mode
-		local line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1]
-		local new_line = line:sub(1, symbol.start_col) .. line:sub(symbol.end_col + 1)
-		vim.api.nvim_buf_set_lines(buf, row, row + 1, false, { new_line })
+		pcall(vim.api.nvim_buf_del_extmark, buf, state.ns, symbol.id)
+		vim.api.nvim_buf_set_text(buf, row, symbol.start_col, row, symbol.end_col, { "" })
 		-- Position cursor at symbol start and enter insert mode
 		vim.api.nvim_win_set_cursor(0, { row + 1, symbol.start_col })
 		vim.cmd("startinsert")
@@ -736,9 +759,7 @@ function M.change_opfunc(type)
 			end
 
 			-- Delete the range and enter insert mode
-			local line = vim.api.nvim_buf_get_lines(buf, start_row, start_row + 1, false)[1]
-			local new_line = line:sub(1, start_col) .. line:sub(end_col + 2)
-			vim.api.nvim_buf_set_lines(buf, start_row, start_row + 1, false, { new_line })
+			vim.api.nvim_buf_set_text(buf, start_row, start_col, end_row, end_col + 1, { "" })
 			vim.api.nvim_win_set_cursor(0, { start_row + 1, start_col })
 			vim.cmd("startinsert")
 		else
@@ -1122,6 +1143,12 @@ function M.setup_keymaps(buf)
 	-- Delete operations
 	vim.keymap.set("n", "x", M.delete_char, opts)
 	vim.keymap.set("n", "X", M.delete_char_before, opts)
+	vim.keymap.set(
+		"i",
+		"<BS>",
+		M.insert_backspace,
+		{ buffer = buf, silent = true, expr = true, replace_keycodes = true }
+	)
 
 	-- Change operations
 	vim.keymap.set("n", "s", M.substitute_char, opts)
@@ -1155,6 +1182,7 @@ function M.remove_keymaps(buf)
 	-- Delete operations
 	pcall(vim.keymap.del, "n", "x", { buffer = buf })
 	pcall(vim.keymap.del, "n", "X", { buffer = buf })
+	pcall(vim.keymap.del, "i", "<BS>", { buffer = buf })
 
 	-- Change operations
 	pcall(vim.keymap.del, "n", "s", { buffer = buf })
