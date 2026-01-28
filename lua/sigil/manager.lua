@@ -45,7 +45,9 @@ function M.attach(buf)
 			-- Force treesitter to parse if available
 			local ok, parser = pcall(vim.treesitter.get_parser, buf)
 			if ok and parser then
-				pcall(function() parser:parse() end)
+				pcall(function()
+					parser:parse()
+				end)
 			end
 			prettify.refresh(buf)
 		end

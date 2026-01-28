@@ -703,6 +703,56 @@ function M.insert_backspace()
 	return "<BS>"
 end
 
+---Move cursor right in insert mode, treating prettified symbols as single chars (C-f)
+---@return string
+function M.insert_move_right()
+	local buf = vim.api.nvim_get_current_buf()
+	local cursor = vim.api.nvim_win_get_cursor(0)
+	local row = cursor[1] - 1 -- 0-indexed
+	local col = cursor[2] -- 0-indexed
+
+	local line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1] or ""
+	if col >= #line then
+		return "<Right>"
+	end
+
+	-- Check if we're on a prettified symbol
+	local symbol = M.get_symbol_at(buf, row, col)
+
+	if symbol then
+		-- Move to end of symbol: need (end_col - col) <Right> presses
+		local chars_to_skip = vim.fn.strchars(line:sub(col + 1, symbol.end_col))
+		return string.rep("<Right>", chars_to_skip)
+	end
+
+	return "<Right>"
+end
+
+---Move cursor left in insert mode, treating prettified symbols as single chars (C-b)
+---@return string
+function M.insert_move_left()
+	local buf = vim.api.nvim_get_current_buf()
+	local cursor = vim.api.nvim_win_get_cursor(0)
+	local row = cursor[1] - 1 -- 0-indexed
+	local col = cursor[2] -- 0-indexed
+
+	if col == 0 then
+		return "<Left>"
+	end
+
+	-- Check if character before cursor is part of a prettified symbol
+	local symbol = M.get_symbol_at(buf, row, col - 1)
+
+	if symbol then
+		-- Move to start of symbol: need (col - start_col) <Left> presses
+		local line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1] or ""
+		local chars_to_skip = vim.fn.strchars(line:sub(symbol.start_col + 1, col))
+		return string.rep("<Left>", chars_to_skip)
+	end
+
+	return "<Left>"
+end
+
 ---Substitute character under cursor (or entire prettified symbol) and enter insert mode
 function M.substitute_char()
 	local buf = vim.api.nvim_get_current_buf()
@@ -1149,6 +1199,18 @@ function M.setup_keymaps(buf)
 		M.insert_backspace,
 		{ buffer = buf, silent = true, expr = true, replace_keycodes = true }
 	)
+	vim.keymap.set(
+		"i",
+		"<C-f>",
+		M.insert_move_right,
+		{ buffer = buf, silent = true, expr = true, replace_keycodes = true }
+	)
+	vim.keymap.set(
+		"i",
+		"<C-b>",
+		M.insert_move_left,
+		{ buffer = buf, silent = true, expr = true, replace_keycodes = true }
+	)
 
 	-- Change operations
 	vim.keymap.set("n", "s", M.substitute_char, opts)
@@ -1183,6 +1245,8 @@ function M.remove_keymaps(buf)
 	pcall(vim.keymap.del, "n", "x", { buffer = buf })
 	pcall(vim.keymap.del, "n", "X", { buffer = buf })
 	pcall(vim.keymap.del, "i", "<BS>", { buffer = buf })
+	pcall(vim.keymap.del, "i", "<C-f>", { buffer = buf })
+	pcall(vim.keymap.del, "i", "<C-b>", { buffer = buf })
 
 	-- Change operations
 	pcall(vim.keymap.del, "n", "s", { buffer = buf })
