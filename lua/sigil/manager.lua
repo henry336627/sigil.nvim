@@ -5,14 +5,12 @@ local state = require("sigil.state")
 local prettify = require("sigil.prettify")
 local motions = require("sigil.motions")
 local visual = require("sigil.visual")
-local predicate = require("sigil.predicate")
-
 local M = {}
 
 ---Augroup for sigil autocmds
 M.augroup = vim.api.nvim_create_augroup("Sigil", { clear = true })
 
----@type table<integer, { start: integer, clear_end: integer, prettify_end: integer, timer_active: boolean }>
+---@type table<integer, { start: integer, clear_end: integer, prettify_end: integer, timer: uv_timer_t? }>
 M._pending = {}
 
 ---Attach to a buffer
@@ -80,7 +78,14 @@ function M.detach(buf)
 	-- Clear visual overlays
 	visual.clear(buf)
 
+	-- Clean up pending timer
+	local pending = M._pending[buf]
+	if pending and pending.timer then
+		pending.timer:stop()
+		pending.timer:close()
+	end
 	M._pending[buf] = nil
+
 	state.detach(buf)
 end
 
@@ -99,6 +104,10 @@ end
 function M.attach_on_lines(buf)
 	vim.api.nvim_buf_attach(buf, false, {
 		on_lines = function(_, bufnr, _, firstline, lastline, new_lastline)
+			-- Return true to detach when buffer is no longer managed
+			if not state.is_attached(bufnr) then
+				return true
+			end
 			if not state.is_enabled(bufnr) or not vim.api.nvim_buf_is_valid(bufnr) then
 				return
 			end
@@ -120,10 +129,11 @@ function M.queue_update(buf, firstline, lastline, new_lastline)
 			start = firstline,
 			clear_end = clear_end,
 			prettify_end = new_lastline,
-			timer_active = false,
+			timer = nil,
 		}
 		M._pending[buf] = pending
 	else
+		-- Expand range to include new changes
 		if firstline < pending.start then
 			pending.start = firstline
 		end
@@ -135,20 +145,22 @@ function M.queue_update(buf, firstline, lastline, new_lastline)
 		end
 	end
 
-	if pending.timer_active then
-		return
-	end
-
 	local delay = config.current.update_debounce_ms or 0
 	if delay <= 0 then
 		M.apply_pending(buf)
 		return
 	end
 
-	pending.timer_active = true
-	vim.defer_fn(function()
+	-- True debounce: restart timer on each change
+	if pending.timer then
+		pending.timer:stop()
+	else
+		pending.timer = vim.uv.new_timer()
+	end
+
+	pending.timer:start(delay, 0, vim.schedule_wrap(function()
 		M.apply_pending(buf)
-	end, delay)
+	end))
 end
 
 ---Apply queued update for a buffer
@@ -158,7 +170,12 @@ function M.apply_pending(buf)
 	if not pending then
 		return
 	end
-	pending.timer_active = false
+
+	-- Clean up timer
+	if pending.timer then
+		pending.timer:stop()
+		pending.timer:close()
+	end
 
 	if not state.is_enabled(buf) or not vim.api.nvim_buf_is_valid(buf) then
 		M._pending[buf] = nil
@@ -170,30 +187,8 @@ function M.apply_pending(buf)
 	local clear_end = math.min(pending.clear_end or start_row, line_count)
 	local prettify_end = math.min(pending.prettify_end or start_row, line_count)
 
-	-- Ensure Tree-sitter is up-to-date when predicates depend on it
-	local ft = vim.bo[buf].filetype
-	local needs_ts = config.current.skip_strings or config.current.skip_comments
-	if config.current.filetype_symbol_contexts and config.current.filetype_symbol_contexts[ft] then
-		needs_ts = true
-	end
-	if config.current.filetype_context_predicates and config.current.filetype_context_predicates[ft] then
-		needs_ts = true
-	end
-	if config.current.filetype_predicates and config.current.filetype_predicates[ft] then
-		needs_ts = true
-	end
-	if config.current.predicate then
-		needs_ts = true
-	end
-
-	if needs_ts and predicate.has_treesitter(buf) then
-		local ok, parser = pcall(vim.treesitter.get_parser, buf)
-		if ok and parser then
-			pcall(function()
-				parser:parse()
-			end)
-		end
-	end
+	-- Tree-sitter parses incrementally via its own on_bytes handler.
+	-- The debounce delay gives it time to catch up, so no forced parse needed.
 
 	if clear_end > start_row then
 		state.clear_lines(buf, start_row, clear_end)
