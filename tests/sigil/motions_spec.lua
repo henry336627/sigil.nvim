@@ -417,12 +417,17 @@ describe("sigil.motions", function()
 			prettify.prettify_buffer(buf)
 		end)
 
+		-- Helper to convert key notation to terminal codes for comparison
+		local function termcodes(str)
+			return vim.api.nvim_replace_termcodes(str, true, false, true)
+		end
+
 		it("should return repeated <BS> when immediately after symbol", function()
 			-- Start at col 4 (space after '->')
 			vim.api.nvim_win_set_cursor(0, { 1, 4 })
 			local res = motions.insert_backspace()
 
-			assert.equals("<BS><BS>", res)
+			assert.equals(termcodes("<BS><BS>"), res)
 		end)
 
 		it("should return <BS><Del> when cursor is inside symbol", function()
@@ -430,7 +435,7 @@ describe("sigil.motions", function()
 			vim.api.nvim_win_set_cursor(0, { 1, 3 })
 			local res = motions.insert_backspace()
 
-			assert.equals("<BS><Del>", res)
+			assert.equals(termcodes("<BS><Del>"), res)
 		end)
 
 		it("should return <BS> when not after symbol", function()
@@ -440,7 +445,7 @@ describe("sigil.motions", function()
 
 			local line = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1]
 			assert.equals("x -> y", line)
-			assert.equals("<BS>", res)
+			assert.equals(termcodes("<BS>"), res)
 		end)
 	end)
 

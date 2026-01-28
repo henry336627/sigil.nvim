@@ -22,29 +22,9 @@ local M = {}
 M.default = {
 	enabled = true,
 	symbols = {},
-	filetype_symbols = {
-		-- Lua-specific
-		lua = {
-			["function"] = "λ",
-			["local"] = "ℓ",
-		},
-		-- Python-specific
-		python = {
-			["def"] = "λ",
-			["True"] = "⊤",
-			["False"] = "⊥",
-		},
-		-- Haskell-specific
-		haskell = {
-			["\\"] = "λ",
-			["forall"] = "∀",
-			["exists"] = "∃",
-			["elem"] = "∈",
-			["notElem"] = "∉",
-		},
-	},
-	filetypes = "*",
-	excluded_filetypes = { "help", "qf", "netrw", "lazy", "mason" },
+	filetype_symbols = {},
+	filetypes = {},
+	excluded_filetypes = {},
 	conceal_cursor = "nvic", -- all modes: normal, visual, insert, command
 	-- Predicate options
 	predicate = nil, -- custom global predicate (overrides skip_strings/skip_comments)

@@ -5,6 +5,9 @@ local state = require("sigil.state")
 
 local M = {}
 
+-- Storage for original mappings (to support fallback to mini-pairs, etc.)
+local original_mappings = {}
+
 ---Get extmarks for a line, sorted by start column
 ---@param buf integer
 ---@param row integer
@@ -675,6 +678,37 @@ function M.delete_char_before()
 	end
 end
 
+---Call original mapping fallback (e.g., mini-pairs)
+---@param buf integer
+---@param key string
+---@return string
+local function call_original_mapping(buf, key)
+	local orig = original_mappings[buf] and original_mappings[buf][key]
+	if orig then
+		if orig.callback then
+			local ok, result = pcall(orig.callback)
+			if ok and result and result ~= "" then
+				-- Callback returned terminal codes directly
+				return result
+			end
+		elseif orig.rhs and orig.rhs ~= "" then
+			if orig.expr == 1 then
+				-- Original mapping is also expr, evaluate it
+				local ok, result = pcall(vim.fn.eval, orig.rhs)
+				if ok and result and result ~= "" then
+					-- Expr returned terminal codes directly
+					return result
+				end
+			else
+				-- Non-expr mapping, convert to terminal codes
+				return vim.api.nvim_replace_termcodes(orig.rhs, true, false, true)
+			end
+		end
+	end
+	-- Default: convert key to terminal codes
+	return vim.api.nvim_replace_termcodes(key, true, false, true)
+end
+
 ---Backspace in insert mode: delete entire prettified symbol before cursor
 ---@return string
 function M.insert_backspace()
@@ -684,7 +718,7 @@ function M.insert_backspace()
 	local col = cursor[2] -- 0-indexed
 
 	if col == 0 then
-		return "<BS>"
+		return call_original_mapping(buf, "<BS>")
 	end
 
 	-- Check if character before cursor is part of a prettified symbol
@@ -697,10 +731,13 @@ function M.insert_backspace()
 		local right = line:sub(col + 1, symbol.end_col)
 		local left_chars = vim.fn.strchars(left)
 		local right_chars = vim.fn.strchars(right)
-		return string.rep("<BS>", left_chars) .. string.rep("<Del>", right_chars)
+		-- Convert to terminal codes (replace_keycodes = false in keymap)
+		local bs = vim.api.nvim_replace_termcodes("<BS>", true, false, true)
+		local del = vim.api.nvim_replace_termcodes("<Del>", true, false, true)
+		return string.rep(bs, left_chars) .. string.rep(del, right_chars)
 	end
 
-	return "<BS>"
+	return call_original_mapping(buf, "<BS>")
 end
 
 ---Move cursor right in insert mode, treating prettified symbols as single chars (C-f)
@@ -713,7 +750,7 @@ function M.insert_move_right()
 
 	local line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1] or ""
 	if col >= #line then
-		return "<Right>"
+		return call_original_mapping(buf, "<C-f>")
 	end
 
 	-- Check if we're on a prettified symbol
@@ -722,10 +759,11 @@ function M.insert_move_right()
 	if symbol then
 		-- Move to end of symbol: need (end_col - col) <Right> presses
 		local chars_to_skip = vim.fn.strchars(line:sub(col + 1, symbol.end_col))
-		return string.rep("<Right>", chars_to_skip)
+		local right = vim.api.nvim_replace_termcodes("<Right>", true, false, true)
+		return string.rep(right, chars_to_skip)
 	end
 
-	return "<Right>"
+	return call_original_mapping(buf, "<C-f>")
 end
 
 ---Move cursor left in insert mode, treating prettified symbols as single chars (C-b)
@@ -737,7 +775,7 @@ function M.insert_move_left()
 	local col = cursor[2] -- 0-indexed
 
 	if col == 0 then
-		return "<Left>"
+		return call_original_mapping(buf, "<C-b>")
 	end
 
 	-- Check if character before cursor is part of a prettified symbol
@@ -747,10 +785,11 @@ function M.insert_move_left()
 		-- Move to start of symbol: need (col - start_col) <Left> presses
 		local line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1] or ""
 		local chars_to_skip = vim.fn.strchars(line:sub(symbol.start_col + 1, col))
-		return string.rep("<Left>", chars_to_skip)
+		local left = vim.api.nvim_replace_termcodes("<Left>", true, false, true)
+		return string.rep(left, chars_to_skip)
 	end
 
-	return "<Left>"
+	return call_original_mapping(buf, "<C-b>")
 end
 
 ---Substitute character under cursor (or entire prettified symbol) and enter insert mode
@@ -1174,10 +1213,27 @@ function M.visual_adjust_selection()
 	end
 end
 
+---Save original mapping before overriding (supports both buffer-local and global mappings)
+---@param buf integer
+---@param mode string
+---@param key string
+local function save_original_mapping(buf, mode, key)
+	local existing = vim.fn.maparg(key, mode, false, true)
+	if existing and next(existing) ~= nil then
+		original_mappings[buf] = original_mappings[buf] or {}
+		original_mappings[buf][key] = existing
+	end
+end
+
 ---Setup keymaps for atomic symbol motions
 ---@param buf integer
 function M.setup_keymaps(buf)
 	local opts = { buffer = buf, silent = true }
+
+	-- Save original insert mode mappings before overriding (for mini-pairs compatibility)
+	save_original_mapping(buf, "i", "<BS>")
+	save_original_mapping(buf, "i", "<C-f>")
+	save_original_mapping(buf, "i", "<C-b>")
 
 	-- Character motions (normal mode)
 	vim.keymap.set("n", "l", M.move_right, opts)
@@ -1197,19 +1253,19 @@ function M.setup_keymaps(buf)
 		"i",
 		"<BS>",
 		M.insert_backspace,
-		{ buffer = buf, silent = true, expr = true, replace_keycodes = true }
+		{ buffer = buf, silent = true, expr = true, replace_keycodes = false }
 	)
 	vim.keymap.set(
 		"i",
 		"<C-f>",
 		M.insert_move_right,
-		{ buffer = buf, silent = true, expr = true, replace_keycodes = true }
+		{ buffer = buf, silent = true, expr = true, replace_keycodes = false }
 	)
 	vim.keymap.set(
 		"i",
 		"<C-b>",
 		M.insert_move_left,
-		{ buffer = buf, silent = true, expr = true, replace_keycodes = true }
+		{ buffer = buf, silent = true, expr = true, replace_keycodes = false }
 	)
 
 	-- Change operations
@@ -1261,6 +1317,9 @@ function M.remove_keymaps(buf)
 	pcall(vim.keymap.del, "x", "e", { buffer = buf })
 	pcall(vim.keymap.del, "x", "j", { buffer = buf })
 	pcall(vim.keymap.del, "x", "k", { buffer = buf })
+
+	-- Clear saved original mappings for this buffer
+	original_mappings[buf] = nil
 end
 
 return M
