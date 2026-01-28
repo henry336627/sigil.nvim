@@ -68,19 +68,58 @@ local comment_captures = {
 	"comment.documentation",
 }
 
----Check if capture list contains any of the target captures
----@param captures string[]
+-- Build sets for O(1) lookup
+local string_capture_set = {}
+for _, cap in ipairs(string_captures) do
+	string_capture_set[cap] = true
+end
+
+local comment_capture_set = {}
+for _, cap in ipairs(comment_captures) do
+	comment_capture_set[cap] = true
+end
+
+---Check if capture matches any target (exact or prefix)
+---@param cap string
+---@param target_set table<string, boolean>
 ---@param targets string[]
 ---@return boolean
-local function has_capture(captures, targets)
-	for _, cap in ipairs(captures) do
-		for _, target in ipairs(targets) do
-			if cap == target or cap:match("^" .. target .. "%.") then
-				return true
-			end
+local function matches_capture(cap, target_set, targets)
+	if target_set[cap] then
+		return true
+	end
+	-- Check if capture is a sub-capture (e.g., "string.special" matches "string")
+	for _, target in ipairs(targets) do
+		if cap:sub(1, #target + 1) == target .. "." then
+			return true
 		end
 	end
 	return false
+end
+
+---Check if position is inside a string and/or comment using Tree-sitter (single query)
+---@param buf integer
+---@param row integer 0-indexed
+---@param col integer 0-indexed
+---@return boolean, boolean is_string, is_comment
+function M.ts_in_string_or_comment(buf, row, col)
+	local captures = M.get_ts_captures(buf, row, col)
+	local is_string = false
+	local is_comment = false
+
+	for _, cap in ipairs(captures) do
+		if not is_string and matches_capture(cap, string_capture_set, string_captures) then
+			is_string = true
+		end
+		if not is_comment and matches_capture(cap, comment_capture_set, comment_captures) then
+			is_comment = true
+		end
+		if is_string and is_comment then
+			break
+		end
+	end
+
+	return is_string, is_comment
 end
 
 ---Check if position is inside a string using Tree-sitter
@@ -89,8 +128,8 @@ end
 ---@param col integer 0-indexed
 ---@return boolean
 function M.ts_in_string(buf, row, col)
-	local captures = M.get_ts_captures(buf, row, col)
-	return has_capture(captures, string_captures)
+	local is_string, _ = M.ts_in_string_or_comment(buf, row, col)
+	return is_string
 end
 
 ---Check if position is inside a comment using Tree-sitter
@@ -99,8 +138,8 @@ end
 ---@param col integer 0-indexed
 ---@return boolean
 function M.ts_in_comment(buf, row, col)
-	local captures = M.get_ts_captures(buf, row, col)
-	return has_capture(captures, comment_captures)
+	local _, is_comment = M.ts_in_string_or_comment(buf, row, col)
+	return is_comment
 end
 
 -- Syntax group patterns for strings and comments (fallback)
@@ -221,12 +260,29 @@ function M.create(opts)
 	local skip_strings = opts.skip_strings ~= false -- default true
 	local skip_comments = opts.skip_comments ~= false -- default true
 
+	-- Fast path: skip nothing
+	if not skip_strings and not skip_comments then
+		return M.always
+	end
+
 	return function(ctx)
-		if skip_strings and M.in_string(ctx.buf, ctx.row, ctx.col) then
-			return false
-		end
-		if skip_comments and M.in_comment(ctx.buf, ctx.row, ctx.col) then
-			return false
+		-- Single Tree-sitter query for both checks
+		if M.has_treesitter(ctx.buf) then
+			local is_string, is_comment = M.ts_in_string_or_comment(ctx.buf, ctx.row, ctx.col)
+			if skip_strings and is_string then
+				return false
+			end
+			if skip_comments and is_comment then
+				return false
+			end
+		else
+			-- Fallback to syntax API (separate calls, but syntax is cheaper)
+			if skip_strings and M.syntax_in_string(ctx.buf, ctx.row, ctx.col) then
+				return false
+			end
+			if skip_comments and M.syntax_in_comment(ctx.buf, ctx.row, ctx.col) then
+				return false
+			end
 		end
 		return true
 	end

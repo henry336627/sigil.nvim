@@ -7,11 +7,13 @@ M.ns = vim.api.nvim_create_namespace("sigil")
 
 ---@class sigil.BufState
 ---@field enabled boolean
----@field marks table<integer, integer[]> Line -> extmark IDs
 
 ---Per-buffer state
 ---@type table<integer, sigil.BufState>
 M.buffers = {}
+
+-- Cache visual module reference
+local visual_module = nil
 
 ---Check if buffer is attached
 ---@param buf integer
@@ -37,10 +39,19 @@ function M.attach(buf)
 
 	M.buffers[buf] = {
 		enabled = true,
-		marks = {},
 	}
 
 	return M.buffers[buf]
+end
+
+---Get visual module (cached)
+---@return table|nil
+local function get_visual()
+	if visual_module == nil then
+		local ok, mod = pcall(require, "sigil.visual")
+		visual_module = ok and mod or false
+	end
+	return visual_module or nil
 end
 
 ---Detach from buffer
@@ -52,9 +63,9 @@ function M.detach(buf)
 
 	-- Clear all extmarks
 	vim.api.nvim_buf_clear_namespace(buf, M.ns, 0, -1)
-	-- Clear visual overlay marks (if module available)
-	local ok, visual = pcall(require, "sigil.visual")
-	if ok then
+	-- Clear visual overlay marks
+	local visual = get_visual()
+	if visual then
 		visual.clear(buf)
 	end
 
@@ -73,15 +84,14 @@ end
 ---Disable prettify for buffer
 ---@param buf integer
 function M.disable(buf)
-	local state = M.buffers[buf]
-	if state then
-		state.enabled = false
+	local buf_state = M.buffers[buf]
+	if buf_state then
+		buf_state.enabled = false
 		-- Clear extmarks when disabled
 		vim.api.nvim_buf_clear_namespace(buf, M.ns, 0, -1)
-		state.marks = {}
-		-- Clear visual overlay marks (if module available)
-		local ok, visual = pcall(require, "sigil.visual")
-		if ok then
+		-- Clear visual overlay marks
+		local visual = get_visual()
+		if visual then
 			visual.clear(buf)
 		end
 	end
@@ -95,36 +105,12 @@ function M.is_enabled(buf)
 	return state ~= nil and state.enabled
 end
 
----Clear marks for specific lines
+---Clear extmarks for specific lines
 ---@param buf integer
 ---@param start_row integer 0-indexed
 ---@param end_row integer 0-indexed, exclusive
 function M.clear_lines(buf, start_row, end_row)
 	vim.api.nvim_buf_clear_namespace(buf, M.ns, start_row, end_row)
-
-	local state = M.buffers[buf]
-	if state then
-		for row = start_row, end_row - 1 do
-			state.marks[row] = nil
-		end
-	end
-end
-
----Store extmark ID for a line
----@param buf integer
----@param row integer
----@param mark_id integer
-function M.add_mark(buf, row, mark_id)
-	local state = M.buffers[buf]
-	if not state then
-		return
-	end
-
-	if not state.marks[row] then
-		state.marks[row] = {}
-	end
-
-	table.insert(state.marks[row], mark_id)
 end
 
 return M

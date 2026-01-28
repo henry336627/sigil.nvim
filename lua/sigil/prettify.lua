@@ -3,7 +3,6 @@
 local config = require("sigil.config")
 local state = require("sigil.state")
 local extmark = require("sigil.extmark")
-local predicate = require("sigil.predicate")
 
 local M = {}
 
@@ -206,10 +205,6 @@ end
 function M.refresh(buf)
 	local line_count = vim.api.nvim_buf_line_count(buf)
 	state.clear_lines(buf, 0, line_count)
-	local buf_state = state.get(buf)
-	if buf_state then
-		buf_state.marks = {}
-	end
 	M.prettify_lines(buf, 0, line_count, { clear = false })
 end
 

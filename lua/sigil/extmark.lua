@@ -1,8 +1,11 @@
 -- sigil.nvim - Extmark wrapper module
 
-local state = require("sigil.state")
-
 local M = {}
+
+-- Import state lazily to avoid circular dependency
+local function get_ns()
+	return require("sigil.state").ns
+end
 
 ---Create a conceal extmark
 ---@param buf integer Buffer number
@@ -25,11 +28,11 @@ function M.create(buf, row, col, end_col, replacement)
 		priority = 100,
 	}
 
-	local ok, id = pcall(vim.api.nvim_buf_set_extmark, buf, state.ns, row, col, opts)
+	local ok, id = pcall(vim.api.nvim_buf_set_extmark, buf, get_ns(), row, col, opts)
 
 	if not ok then
 		-- Fallback for older Neovim versions that don't support overlay virt_text.
-		ok, id = pcall(vim.api.nvim_buf_set_extmark, buf, state.ns, row, col, {
+		ok, id = pcall(vim.api.nvim_buf_set_extmark, buf, get_ns(), row, col, {
 			end_col = end_col,
 			conceal = replacement,
 			priority = 100,
@@ -37,7 +40,6 @@ function M.create(buf, row, col, end_col, replacement)
 	end
 
 	if ok then
-		state.add_mark(buf, row, id)
 		return id
 	end
 
@@ -48,7 +50,7 @@ end
 ---@param buf integer
 ---@param id integer
 function M.delete(buf, id)
-	pcall(vim.api.nvim_buf_del_extmark, buf, state.ns, id)
+	pcall(vim.api.nvim_buf_del_extmark, buf, get_ns(), id)
 end
 
 ---Clear extmarks in a range
@@ -58,7 +60,7 @@ end
 function M.clear(buf, start_row, end_row)
 	start_row = start_row or 0
 	end_row = end_row or -1
-	vim.api.nvim_buf_clear_namespace(buf, state.ns, start_row, end_row)
+	vim.api.nvim_buf_clear_namespace(buf, get_ns(), start_row, end_row)
 end
 
 ---Get extmark at position
@@ -67,7 +69,7 @@ end
 ---@param col integer
 ---@return table|nil Extmark info or nil
 function M.get_at(buf, row, col)
-	local marks = vim.api.nvim_buf_get_extmarks(buf, state.ns, { row, col }, { row, col + 1 }, { details = true })
+	local marks = vim.api.nvim_buf_get_extmarks(buf, get_ns(), { row, col }, { row, col + 1 }, { details = true })
 
 	if #marks > 0 then
 		return {
@@ -85,7 +87,7 @@ end
 ---@param buf integer
 ---@return table[] List of extmarks
 function M.get_all(buf)
-	return vim.api.nvim_buf_get_extmarks(buf, state.ns, 0, -1, { details = true })
+	return vim.api.nvim_buf_get_extmarks(buf, get_ns(), 0, -1, { details = true })
 end
 
 return M

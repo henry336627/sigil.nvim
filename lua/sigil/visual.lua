@@ -7,8 +7,9 @@ local M = {}
 -- Namespace for visual overlay marks
 M.ns = vim.api.nvim_create_namespace("sigil_visual")
 
--- Track which buffers currently have visual overlays
-M._active = {}
+-- Track state per buffer: { active: bool, mode: string, start_row, start_col, end_row, end_col }
+---@type table<integer, { active: boolean, mode: string?, sr: integer?, sc: integer?, er: integer?, ec: integer? }>
+M._state = {}
 
 ---Extract replacement character from extmark details
 ---@param details table Extmark details
@@ -56,15 +57,18 @@ end
 ---Clear visual overlay marks
 ---@param buf integer
 function M.clear(buf)
-	vim.api.nvim_buf_clear_namespace(buf, M.ns, 0, -1)
-	M._active[buf] = nil
+	local st = M._state[buf]
+	if st and st.active then
+		vim.api.nvim_buf_clear_namespace(buf, M.ns, 0, -1)
+	end
+	M._state[buf] = nil
 end
 
 ---Update visual overlay marks for current selection
 ---@param buf integer
 function M.update(buf)
 	if not state.is_enabled(buf) then
-		if M._active[buf] then
+		if M._state[buf] then
 			M.clear(buf)
 		end
 		return
@@ -72,15 +76,32 @@ function M.update(buf)
 
 	local mode, start_row, start_col, end_row, end_col = get_visual_range()
 	if not mode then
-		if M._active[buf] then
+		if M._state[buf] then
 			M.clear(buf)
 		end
 		return
 	end
 
-	-- Reset overlay marks
-	M.clear(buf)
-	M._active[buf] = true
+	-- Check if selection changed
+	local st = M._state[buf]
+	if st and st.mode == mode and st.sr == start_row and st.sc == start_col and st.er == end_row and st.ec == end_col then
+		return -- No change, skip update
+	end
+
+	-- Clear previous overlays
+	if st and st.active then
+		vim.api.nvim_buf_clear_namespace(buf, M.ns, 0, -1)
+	end
+
+	-- Update state
+	M._state[buf] = {
+		active = true,
+		mode = mode,
+		sr = start_row,
+		sc = start_col,
+		er = end_row,
+		ec = end_col,
+	}
 
 	-- Fetch base extmarks within selected rows
 	local marks = vim.api.nvim_buf_get_extmarks(buf, state.ns, { start_row, 0 }, { end_row, -1 }, { details = true })
