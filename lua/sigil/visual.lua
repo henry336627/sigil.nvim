@@ -7,6 +7,9 @@ local M = {}
 -- Namespace for visual overlay marks
 M.ns = vim.api.nvim_create_namespace("sigil_visual")
 
+-- Track which buffers currently have visual overlays
+M._active = {}
+
 ---Extract replacement character from extmark details
 ---@param details table Extmark details
 ---@return string|nil
@@ -54,24 +57,30 @@ end
 ---@param buf integer
 function M.clear(buf)
 	vim.api.nvim_buf_clear_namespace(buf, M.ns, 0, -1)
+	M._active[buf] = nil
 end
 
 ---Update visual overlay marks for current selection
 ---@param buf integer
 function M.update(buf)
 	if not state.is_enabled(buf) then
-		M.clear(buf)
+		if M._active[buf] then
+			M.clear(buf)
+		end
 		return
 	end
 
 	local mode, start_row, start_col, end_row, end_col = get_visual_range()
 	if not mode then
-		M.clear(buf)
+		if M._active[buf] then
+			M.clear(buf)
+		end
 		return
 	end
 
 	-- Reset overlay marks
 	M.clear(buf)
+	M._active[buf] = true
 
 	-- Fetch base extmarks within selected rows
 	local marks = vim.api.nvim_buf_get_extmarks(buf, state.ns, { start_row, 0 }, { end_row, -1 }, { details = true })

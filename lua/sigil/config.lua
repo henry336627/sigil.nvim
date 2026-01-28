@@ -2,6 +2,11 @@
 
 local M = {}
 
+---@class sigil.ConfigCache
+---@field symbols table<string, table<string, string>>
+---@field sorted_symbols table<string, table[]>
+---@field predicates table<string, fun(ctx: sigil.MatchContext): boolean>
+
 ---@class sigil.Config
 ---@field enabled boolean Enable prettify-symbols
 ---@field symbols table<string, string> Global symbol mappings
@@ -9,6 +14,7 @@ local M = {}
 ---@field filetypes string[]|"*" Filetypes to enable (or "*" for all)
 ---@field excluded_filetypes string[] Filetypes to exclude
 ---@field conceal_cursor string Modes where cursor line stays concealed
+---@field update_debounce_ms integer Debounce for incremental updates (ms)
 ---@field predicate? fun(ctx: sigil.MatchContext): boolean Global predicate function
 ---@field filetype_predicates? table<string, fun(ctx: sigil.MatchContext): boolean> Per-filetype predicates
 ---@field skip_strings? boolean Skip prettification inside strings (default: true)
@@ -26,6 +32,7 @@ M.default = {
 	filetypes = {},
 	excluded_filetypes = {},
 	conceal_cursor = "nvic", -- all modes: normal, visual, insert, command
+	update_debounce_ms = 30,
 	-- Predicate options
 	predicate = nil, -- custom global predicate (overrides skip_strings/skip_comments)
 	filetype_predicates = {}, -- per-filetype custom predicates
@@ -36,6 +43,13 @@ M.default = {
 	filetype_context_predicates = {}, -- per-filetype context predicate (e.g. math)
 }
 
+---@type sigil.ConfigCache
+M._cache = {
+	symbols = {},
+	sorted_symbols = {},
+	predicates = {},
+}
+
 ---Current merged configuration
 ---@type sigil.Config
 M.current = vim.deepcopy(M.default)
@@ -44,21 +58,57 @@ M.current = vim.deepcopy(M.default)
 ---@param opts? sigil.Config
 function M.setup(opts)
 	M.current = vim.tbl_deep_extend("force", vim.deepcopy(M.default), opts or {})
+	M._cache = {
+		symbols = {},
+		sorted_symbols = {},
+		predicates = {},
+	}
 end
 
 ---Get symbols for a specific filetype
 ---@param ft string
 ---@return table<string, string>
 function M.get_symbols(ft)
-	local symbols = vim.deepcopy(M.current.symbols)
+	if M._cache.symbols[ft] then
+		return M._cache.symbols[ft]
+	end
+
+	local symbols = {}
+	for key, value in pairs(M.current.symbols) do
+		symbols[key] = value
+	end
 
 	-- Merge filetype-specific symbols
 	local ft_symbols = M.current.filetype_symbols[ft]
 	if ft_symbols then
-		symbols = vim.tbl_extend("force", symbols, ft_symbols)
+		for key, value in pairs(ft_symbols) do
+			symbols[key] = value
+		end
 	end
 
+	M._cache.symbols[ft] = symbols
 	return symbols
+end
+
+---Get sorted symbols list for a filetype
+---@param ft string
+---@return table[] List of {pattern, replacement}
+function M.get_sorted_symbols(ft)
+	if M._cache.sorted_symbols[ft] then
+		return M._cache.sorted_symbols[ft]
+	end
+
+	local symbols = M.get_symbols(ft)
+	local sorted = {}
+	for pattern, replacement in pairs(symbols) do
+		table.insert(sorted, { pattern = pattern, replacement = replacement })
+	end
+	table.sort(sorted, function(a, b)
+		return #a.pattern > #b.pattern
+	end)
+
+	M._cache.sorted_symbols[ft] = sorted
+	return sorted
 end
 
 ---Check if filetype should be prettified
@@ -83,6 +133,10 @@ end
 ---@param ft string
 ---@return fun(ctx: sigil.MatchContext): boolean
 function M.get_predicate(ft)
+	if M._cache.predicates[ft] then
+		return M._cache.predicates[ft]
+	end
+
 	local base_pred = nil
 
 	-- Check for filetype-specific predicate
@@ -107,6 +161,7 @@ function M.get_predicate(ft)
 
 	local context_spec = M.current.filetype_symbol_contexts and M.current.filetype_symbol_contexts[ft]
 	if not context_spec then
+		M._cache.predicates[ft] = base_pred
 		return base_pred
 	end
 
@@ -114,6 +169,7 @@ function M.get_predicate(ft)
 	local text_list = context_spec.text_only or context_spec.text or {}
 
 	if #math_list == 0 and #text_list == 0 then
+		M._cache.predicates[ft] = base_pred
 		return base_pred
 	end
 
@@ -135,7 +191,7 @@ function M.get_predicate(ft)
 		context_pred = require("sigil.context").in_math
 	end
 
-	return function(ctx)
+	local pred = function(ctx)
 		if base_pred and not base_pred(ctx) then
 			return false
 		end
@@ -153,6 +209,9 @@ function M.get_predicate(ft)
 
 		return true
 	end
+
+	M._cache.predicates[ft] = pred
+	return pred
 end
 
 return M

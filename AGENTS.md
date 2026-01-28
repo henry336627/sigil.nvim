@@ -23,6 +23,7 @@ Use these to understand how features work in practice:
 
 - `phase_3.lua` — Context-aware prettification (predicates, skip strings/comments)
 - `phase_4.lua` — Atomic symbol motions (h/l, w/b/e, x/X, s/c)
+- `phase_8.lua` — Performance optimizations (incremental + debounce updates)
 
 To test an example:
 ```bash
@@ -59,6 +60,7 @@ stylua --check lua/
 When working on complex tasks, check these files:
 - `task_plan.md` — phases and current status
 - `architecture.md` — detailed module design
+- `features.md` — **ALWAYS CHECK** for implemented behavior and examples
 - `notes.md` — **ALWAYS CHECK** for error history and past decisions
 
 ## Reference Materials

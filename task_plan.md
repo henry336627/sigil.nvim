@@ -54,9 +54,9 @@ Create a Neovim plugin that visually replaces text patterns with Unicode symbols
   - [ ] 7.4 Write tests for unprettify behavior
 
 - [ ] Phase 8: Performance Optimization
-  - [ ] 8.1 Use `nvim_buf_attach` for incremental updates (only changed lines)
-  - [ ] 8.2 Add debounce for TextChangedI (avoid excessive updates while typing)
-  - [ ] 8.3 Cache sorted symbols list (avoid re-sorting on every line)
+  - [x] 8.1 Use `nvim_buf_attach` for incremental updates (only changed lines)
+  - [x] 8.2 Add debounce for incremental updates (avoid excessive updates while typing)
+  - [x] 8.3 Cache sorted symbols list (avoid re-sorting on every line)
   - [ ] 8.4 Optimize visible range only (defer off-screen lines)
   - [ ] 8.5 Benchmark and profile on large files (10,000+ lines)
   - [ ] 8.6 Write performance tests
@@ -76,7 +76,7 @@ Create a Neovim plugin that visually replaces text patterns with Unicode symbols
 - Atomic symbol motions: prettified symbols behave as single characters for navigation/editing
 
 ## Status
-**Phase 3 COMPLETE** — Context-aware prettification ready, continue with Phase 4: Atomic Symbol Motions
+**Phase 8 IN PROGRESS** — Incremental updates + debounce + symbol cache implemented; evaluate visible-range optimizations next
 
 ## Files
 - `task_plan.md` — this file

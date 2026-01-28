@@ -49,6 +49,7 @@ sigil/
   - `default` — default configuration table
   - `get()` — get merged config
   - `get_symbols(ft)` — get symbols for filetype
+  - `get_sorted_symbols(ft)` — get cached, length-sorted symbol list for filetype
 - Default config structure:
   ```lua
   {
@@ -176,7 +177,8 @@ On buffer enter:
         ↓
    unprettify.setup_autocmds(buf)
         ↓
-On text change (TextChanged/TextChangedI):
+On buffer change (on_lines):
+   on_lines callback computes changed range
    prettify.prettify_lines(buf, changed_start, changed_end)
         ↓
 On cursor move:
@@ -188,5 +190,8 @@ On cursor move:
 - **Extmarks with conceal**: Standard Neovim approach, works with conceallevel
 - **Per-buffer state**: Each buffer has independent state and extmarks
 - **Lazy prettification**: Only prettify visible/changed lines for performance
+- **Incremental updates**: Use `nvim_buf_attach` on_lines callbacks to re-prettify only changed ranges
+- **Cached symbols/predicates**: Filetype symbol lists and predicates are cached after setup
+- **Debounced updates**: Buffer change handling is debounced to avoid excessive re-prettify during typing
 - **Predicate system**: Extensible filtering like Emacs
 - **Filetype symbols**: Allow different symbols per language

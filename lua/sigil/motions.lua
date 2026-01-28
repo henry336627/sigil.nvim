@@ -249,92 +249,111 @@ local function get_replacement(details)
 	return nil
 end
 
+---Collect symbols for a line (sorted by column)
+---@param buf integer
+---@param row integer
+---@return table[]
+local function get_line_symbols(buf, row)
+	local marks = vim.api.nvim_buf_get_extmarks(buf, state.ns, { row, 0 }, { row, -1 }, { details = true })
+	local symbols = {}
+	for _, mark in ipairs(marks) do
+		local start_col = mark[3]
+		local end_col = mark[4].end_col or (start_col + 1)
+		if end_col > start_col then
+			table.insert(symbols, {
+				id = mark[1],
+				start_col = start_col,
+				end_col = end_col,
+				replacement = get_replacement(mark[4]),
+			})
+		end
+	end
+	return symbols
+end
+
+---Find symbol at column in a precomputed list
+---@param symbols table[]
+---@param col integer
+---@return table|nil
+local function symbol_at(symbols, col)
+	for _, symbol in ipairs(symbols) do
+		if col >= symbol.start_col and col < symbol.end_col then
+			return symbol
+		end
+	end
+	return nil
+end
+
+---Find next symbol starting after column in a precomputed list
+---@param symbols table[]
+---@param col integer
+---@return table|nil
+local function next_symbol(symbols, col)
+	for _, symbol in ipairs(symbols) do
+		if symbol.start_col > col then
+			return symbol
+		end
+	end
+	return nil
+end
+
+---Find previous symbol ending before or at column in a precomputed list
+---@param symbols table[]
+---@param col integer
+---@return table|nil
+local function prev_symbol(symbols, col)
+	for i = #symbols, 1, -1 do
+		local symbol = symbols[i]
+		if symbol.end_col <= col then
+			return symbol
+		end
+	end
+	return nil
+end
+
 ---Get extmark info at cursor position if it's a prettified symbol
 ---@param buf integer Buffer number
 ---@param row integer 0-indexed row
 ---@param col integer 0-indexed column
+---@param symbols? table[] Precomputed line symbols
 ---@return table|nil Extmark info {id, start_col, end_col, replacement} or nil
-function M.get_symbol_at(buf, row, col)
+function M.get_symbol_at(buf, row, col, symbols)
 	if not state.is_enabled(buf) then
 		return nil
 	end
 
-	-- Get all extmarks on this line
-	local marks = vim.api.nvim_buf_get_extmarks(buf, state.ns, { row, 0 }, { row, -1 }, { details = true })
-
-	for _, mark in ipairs(marks) do
-		local mark_id = mark[1]
-		local mark_col = mark[3]
-		local details = mark[4]
-
-		-- Check if cursor is within this extmark's range
-		local end_col = details.end_col or (mark_col + 1)
-		if col >= mark_col and col < end_col then
-			return {
-				id = mark_id,
-				start_col = mark_col,
-				end_col = end_col,
-				replacement = get_replacement(details),
-			}
-		end
-	end
-
-	return nil
+	local line_symbols = symbols or get_line_symbols(buf, row)
+	return symbol_at(line_symbols, col)
 end
 
 ---Get extmark starting at or after given column
 ---@param buf integer
 ---@param row integer 0-indexed row
 ---@param col integer 0-indexed column (exclusive, search starts after this)
+---@param symbols? table[] Precomputed line symbols
 ---@return table|nil Extmark info or nil
-function M.get_next_symbol(buf, row, col)
+function M.get_next_symbol(buf, row, col, symbols)
 	if not state.is_enabled(buf) then
 		return nil
 	end
 
-	local marks = vim.api.nvim_buf_get_extmarks(buf, state.ns, { row, col + 1 }, { row, -1 }, { details = true })
-
-	if #marks > 0 then
-		local mark = marks[1]
-		return {
-			id = mark[1],
-			start_col = mark[3],
-			end_col = mark[4].end_col or mark[3],
-			replacement = get_replacement(mark[4]),
-		}
-	end
-
-	return nil
+	local line_symbols = symbols or get_line_symbols(buf, row)
+	return next_symbol(line_symbols, col)
 end
 
 ---Get extmark ending at or before given column
 ---@param buf integer
 ---@param row integer 0-indexed row
 ---@param col integer 0-indexed column (exclusive, search ends before this)
+---@param symbols? table[] Precomputed line symbols
 ---@return table|nil Extmark info or nil
-function M.get_prev_symbol(buf, row, col)
+function M.get_prev_symbol(buf, row, col, symbols)
 	if not state.is_enabled(buf) then
 		return nil
 	end
 
-	-- Get all marks on this line up to col
-	local marks = vim.api.nvim_buf_get_extmarks(buf, state.ns, { row, 0 }, { row, col }, { details = true })
-
-	-- Find the last one that ends before or at col
-	for i = #marks, 1, -1 do
-		local mark = marks[i]
-		local end_col = mark[4].end_col or mark[3]
-		if end_col <= col then
-			return {
-				id = mark[1],
-				start_col = mark[3],
-				end_col = end_col,
-				replacement = get_replacement(mark[4]),
-			}
-		end
-	end
-
-	return nil
+	local line_symbols = symbols or get_line_symbols(buf, row)
+	return prev_symbol(line_symbols, col)
 end
 
 ---Move cursor right, treating prettified symbols as single chars
@@ -345,7 +364,8 @@ function M.move_right()
 	local col = cursor[2] -- 0-indexed
 
 	-- Check if we're on a prettified symbol
-	local symbol = M.get_symbol_at(buf, row, col)
+	local symbols = get_line_symbols(buf, row)
+	local symbol = M.get_symbol_at(buf, row, col, symbols)
 
 	if symbol then
 		-- Move to end of symbol (past the entire prettified text)
@@ -371,7 +391,8 @@ function M.move_left()
 	local col = cursor[2] -- 0-indexed
 
 	-- Check if we're on a prettified symbol (not at its start)
-	local symbol = M.get_symbol_at(buf, row, col)
+	local symbols = get_line_symbols(buf, row)
+	local symbol = M.get_symbol_at(buf, row, col, symbols)
 
 	if symbol and col > symbol.start_col then
 		-- Move to start of symbol
@@ -379,7 +400,7 @@ function M.move_left()
 	else
 		-- Check if position to the left is end of a symbol
 		if col > 0 then
-			local prev_symbol = M.get_symbol_at(buf, row, col - 1)
+			local prev_symbol = M.get_symbol_at(buf, row, col - 1, symbols)
 
 			if prev_symbol then
 				-- Move to start of that symbol
@@ -424,8 +445,9 @@ function M.move_word_forward()
 		return
 	end
 
+	local symbols = get_line_symbols(buf, row)
 	-- If we're on a prettified symbol, skip to end of it first
-	local symbol = M.get_symbol_at(buf, row, col)
+	local symbol = symbol_at(symbols, col)
 	if symbol then
 		col = symbol.end_col
 	else
@@ -434,7 +456,7 @@ function M.move_word_forward()
 		if is_word_char(char) then
 			-- Skip word characters
 			while col < #line do
-				local next_symbol = M.get_symbol_at(buf, row, col)
+				local next_symbol = symbol_at(symbols, col)
 				if next_symbol then
 					col = next_symbol.end_col
 					break
@@ -448,7 +470,7 @@ function M.move_word_forward()
 		elseif not is_whitespace(char) then
 			-- Skip punctuation
 			while col < #line do
-				local next_symbol = M.get_symbol_at(buf, row, col)
+				local next_symbol = symbol_at(symbols, col)
 				if next_symbol then
 					col = next_symbol.end_col
 					break
@@ -493,6 +515,7 @@ function M.move_word_backward()
 		return
 	end
 
+	local symbols = get_line_symbols(buf, row)
 	-- Move one position left first
 	col = col - 1
 
@@ -506,7 +529,7 @@ function M.move_word_backward()
 	end
 
 	-- Check if we're now on a prettified symbol
-	local symbol = M.get_symbol_at(buf, row, col)
+	local symbol = symbol_at(symbols, col)
 	if symbol then
 		vim.api.nvim_win_set_cursor(0, { row + 1, symbol.start_col })
 		return
@@ -517,7 +540,7 @@ function M.move_word_backward()
 	if is_word_char(char) then
 		-- Go back to start of word
 		while col > 0 do
-			local prev_symbol = M.get_symbol_at(buf, row, col - 1)
+			local prev_symbol = symbol_at(symbols, col - 1)
 			if prev_symbol then
 				break
 			end
@@ -530,7 +553,7 @@ function M.move_word_backward()
 	elseif not is_whitespace(char) then
 		-- Go back to start of punctuation
 		while col > 0 do
-			local prev_symbol = M.get_symbol_at(buf, row, col - 1)
+			local prev_symbol = symbol_at(symbols, col - 1)
 			if prev_symbol then
 				break
 			end
@@ -564,8 +587,9 @@ function M.move_word_end()
 		return
 	end
 
+	local symbols = get_line_symbols(buf, row)
 	-- If we're on a prettified symbol, skip past it first
-	local current_symbol = M.get_symbol_at(buf, row, col)
+	local current_symbol = symbol_at(symbols, col)
 	if current_symbol then
 		col = current_symbol.end_col
 	else
@@ -589,7 +613,7 @@ function M.move_word_end()
 	end
 
 	-- Check if we're now on a prettified symbol
-	local symbol = M.get_symbol_at(buf, row, col)
+	local symbol = symbol_at(symbols, col)
 	if symbol then
 		-- For concealed symbols, cursor on start_col visually appears "on" the symbol
 		vim.api.nvim_win_set_cursor(0, { row + 1, symbol.start_col })
@@ -600,7 +624,7 @@ function M.move_word_end()
 	local char = line:sub(col + 1, col + 1)
 	if is_word_char(char) then
 		while col < #line - 1 do
-			local next_symbol = M.get_symbol_at(buf, row, col + 1)
+			local next_symbol = symbol_at(symbols, col + 1)
 			if next_symbol then
 				break
 			end
@@ -612,7 +636,7 @@ function M.move_word_end()
 		end
 	elseif not is_whitespace(char) then
 		while col < #line - 1 do
-			local next_symbol = M.get_symbol_at(buf, row, col + 1)
+			local next_symbol = symbol_at(symbols, col + 1)
 			if next_symbol then
 				break
 			end
@@ -938,7 +962,8 @@ function M.visual_move_right()
 	end
 
 	-- Check if we're on a prettified symbol
-	local symbol = M.get_symbol_at(buf, row, col)
+	local symbols = get_line_symbols(buf, row)
+	local symbol = symbol_at(symbols, col)
 
 	if symbol then
 		-- On a symbol: move past it (to end_col)
@@ -961,14 +986,15 @@ function M.visual_move_left()
 	local col = cursor[2] -- 0-indexed
 
 	-- Check if we're on a prettified symbol (not at its start)
-	local symbol = M.get_symbol_at(buf, row, col)
+	local symbols = get_line_symbols(buf, row)
+	local symbol = symbol_at(symbols, col)
 
 	if symbol and col > symbol.start_col then
 		-- Move to start of symbol
 		vim.api.nvim_win_set_cursor(0, { row + 1, symbol.start_col })
 	elseif col > 0 then
 		-- Check if position to the left is part of a symbol
-		local prev_symbol = M.get_symbol_at(buf, row, col - 1)
+		local prev_symbol = symbol_at(symbols, col - 1)
 
 		if prev_symbol then
 			-- Move to start of that symbol
@@ -994,8 +1020,9 @@ function M.visual_move_word_forward()
 		return
 	end
 
+	local symbols = get_line_symbols(buf, row)
 	-- If we're on a prettified symbol, skip to end of it first
-	local symbol = M.get_symbol_at(buf, row, col)
+	local symbol = symbol_at(symbols, col)
 	if symbol then
 		col = symbol.end_col
 	else
@@ -1003,7 +1030,7 @@ function M.visual_move_word_forward()
 		local char = line:sub(col + 1, col + 1)
 		if is_word_char(char) then
 			while col < #line do
-				local next_symbol = M.get_symbol_at(buf, row, col)
+				local next_symbol = symbol_at(symbols, col)
 				if next_symbol then
 					col = next_symbol.end_col
 					break
@@ -1016,7 +1043,7 @@ function M.visual_move_word_forward()
 			end
 		elseif not is_whitespace(char) then
 			while col < #line do
-				local next_symbol = M.get_symbol_at(buf, row, col)
+				local next_symbol = symbol_at(symbols, col)
 				if next_symbol then
 					col = next_symbol.end_col
 					break
@@ -1060,6 +1087,7 @@ function M.visual_move_word_backward()
 		return
 	end
 
+	local symbols = get_line_symbols(buf, row)
 	-- Move one position left first
 	col = col - 1
 
@@ -1073,7 +1101,7 @@ function M.visual_move_word_backward()
 	end
 
 	-- Check if we're now on a prettified symbol
-	local symbol = M.get_symbol_at(buf, row, col)
+	local symbol = symbol_at(symbols, col)
 	if symbol then
 		vim.api.nvim_win_set_cursor(0, { row + 1, symbol.start_col })
 		return
@@ -1083,7 +1111,7 @@ function M.visual_move_word_backward()
 	local char = line:sub(col + 1, col + 1)
 	if is_word_char(char) then
 		while col > 0 do
-			local prev_symbol = M.get_symbol_at(buf, row, col - 1)
+			local prev_symbol = symbol_at(symbols, col - 1)
 			if prev_symbol then
 				break
 			end
@@ -1095,7 +1123,7 @@ function M.visual_move_word_backward()
 		end
 	elseif not is_whitespace(char) then
 		while col > 0 do
-			local prev_symbol = M.get_symbol_at(buf, row, col - 1)
+			local prev_symbol = symbol_at(symbols, col - 1)
 			if prev_symbol then
 				break
 			end
@@ -1128,8 +1156,9 @@ function M.visual_move_word_end()
 		return
 	end
 
+	local symbols = get_line_symbols(buf, row)
 	-- If we're on a prettified symbol, skip past it first
-	local current_symbol = M.get_symbol_at(buf, row, col)
+	local current_symbol = symbol_at(symbols, col)
 	if current_symbol then
 		col = current_symbol.end_col
 	else
@@ -1151,7 +1180,7 @@ function M.visual_move_word_end()
 	end
 
 	-- Check if we're now on a prettified symbol
-	local symbol = M.get_symbol_at(buf, row, col)
+	local symbol = symbol_at(symbols, col)
 	if symbol then
 		-- In visual mode, position at end of symbol (end_col - 1)
 		vim.api.nvim_win_set_cursor(0, { row + 1, symbol.end_col - 1 })
@@ -1162,7 +1191,7 @@ function M.visual_move_word_end()
 	local char = line:sub(col + 1, col + 1)
 	if is_word_char(char) then
 		while col < #line - 1 do
-			local next_symbol = M.get_symbol_at(buf, row, col + 1)
+			local next_symbol = symbol_at(symbols, col + 1)
 			if next_symbol then
 				break
 			end
@@ -1174,7 +1203,7 @@ function M.visual_move_word_end()
 		end
 	elseif not is_whitespace(char) then
 		while col < #line - 1 do
-			local next_symbol = M.get_symbol_at(buf, row, col + 1)
+			local next_symbol = symbol_at(symbols, col + 1)
 			if next_symbol then
 				break
 			end

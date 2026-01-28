@@ -7,21 +7,41 @@ local predicate = require("sigil.predicate")
 
 local M = {}
 
+---Normalize symbols to a sorted list
+---@param symbols table<string, string>|table[] Map or list of {pattern, replacement}
+---@return table[] sorted list
+local function normalize_symbols(symbols)
+	if symbols[1] and symbols[1].pattern then
+		return symbols
+	end
+
+	local sorted = {}
+	for pattern, replacement in pairs(symbols) do
+		table.insert(sorted, { pattern = pattern, replacement = replacement })
+	end
+	table.sort(sorted, function(a, b)
+		return #a.pattern > #b.pattern
+	end)
+
+	return sorted
+end
+
 ---Find all symbol matches in a line
 ---@param line string
----@param symbols table<string, string>
+---@param symbols table<string, string>|table[]
 ---@return table[] List of {col, end_col, replacement}
 function M.find_matches(line, symbols)
 	local matches = {}
 
-	-- Sort symbols by length (longest first) to handle overlapping patterns
-	local sorted_symbols = {}
-	for pattern, replacement in pairs(symbols) do
-		table.insert(sorted_symbols, { pattern = pattern, replacement = replacement })
+	if line == "" then
+		return matches
 	end
-	table.sort(sorted_symbols, function(a, b)
-		return #a.pattern > #b.pattern
-	end)
+
+	-- Sort symbols by length (longest first) to handle overlapping patterns
+	local sorted_symbols = normalize_symbols(symbols)
+	if #sorted_symbols == 0 then
+		return matches
+	end
 
 	-- Track which positions are already matched
 	local matched_positions = {}
@@ -103,7 +123,7 @@ end
 ---@param buf integer
 ---@param row integer 0-indexed
 ---@param line string
----@param symbols table<string, string>
+---@param symbols table[] Sorted symbols list
 ---@param pred? fun(ctx: sigil.MatchContext): boolean
 function M.prettify_line(buf, row, line, symbols, pred)
 	local matches = M.find_matches(line, symbols)
@@ -134,23 +154,32 @@ end
 ---@param buf integer
 ---@param start_row integer 0-indexed
 ---@param end_row integer 0-indexed, exclusive
-function M.prettify_lines(buf, start_row, end_row)
+---@param opts? { clear?: boolean }
+function M.prettify_lines(buf, start_row, end_row, opts)
+	opts = opts or {}
+
 	if not state.is_enabled(buf) then
 		return
 	end
 
 	local ft = vim.bo[buf].filetype
-	local symbols = config.get_symbols(ft)
+	local symbols = config.get_sorted_symbols(ft)
 
-	if vim.tbl_isempty(symbols) then
+	local line_count = vim.api.nvim_buf_line_count(buf)
+	start_row = math.max(0, math.min(start_row, line_count))
+	end_row = math.max(start_row, math.min(end_row, line_count))
+
+	if opts.clear ~= false then
+		-- Clear existing marks in range
+		state.clear_lines(buf, start_row, end_row)
+	end
+
+	if end_row <= start_row or #symbols == 0 then
 		return
 	end
 
 	-- Get predicate (custom, filetype-specific, or default)
 	local pred = config.get_predicate(ft)
-
-	-- Clear existing marks in range
-	state.clear_lines(buf, start_row, end_row)
 
 	-- Get lines
 	local lines = vim.api.nvim_buf_get_lines(buf, start_row, end_row, false)
@@ -175,12 +204,13 @@ end
 ---Refresh buffer (clear and re-prettify)
 ---@param buf integer
 function M.refresh(buf)
-	extmark.clear(buf)
+	local line_count = vim.api.nvim_buf_line_count(buf)
+	state.clear_lines(buf, 0, line_count)
 	local buf_state = state.get(buf)
 	if buf_state then
 		buf_state.marks = {}
 	end
-	M.prettify_buffer(buf)
+	M.prettify_lines(buf, 0, line_count, { clear = false })
 end
 
 return M
