@@ -55,6 +55,36 @@ local function is_tree_ready(buf)
 	return trees and #trees > 0
 end
 
+---Check if position is inside $...$ using simple text analysis
+---@param buf integer
+---@param row integer
+---@param col integer
+---@return boolean
+local function in_dollar_math(buf, row, col)
+	local line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1]
+	if not line then
+		return false
+	end
+
+	-- Count unescaped $ before position
+	local dollar_count = 0
+	local i = 1
+	while i <= col do
+		local char = line:sub(i, i)
+		if char == "$" then
+			-- Check if escaped (preceded by \)
+			local prev = i > 1 and line:sub(i - 1, i - 1) or ""
+			if prev ~= "\\" then
+				dollar_count = dollar_count + 1
+			end
+		end
+		i = i + 1
+	end
+
+	-- Odd number of $ means we're inside math
+	return dollar_count % 2 == 1
+end
+
 ---Check math context for Typst using Tree-sitter
 ---@param buf integer
 ---@param row integer
@@ -80,6 +110,7 @@ local function typst_in_math(buf, row, col)
 		if node then
 			local in_math = false
 			local in_string = false
+			local has_error = false
 
 			while node do
 				local t = node_type(node)
@@ -89,10 +120,21 @@ local function typst_in_math(buf, row, col)
 				if t == "math" or t == "equation" then
 					in_math = true
 				end
+				-- Track if we're inside an ERROR node (incomplete syntax)
+				if t == "ERROR" then
+					has_error = true
+				end
 				node = node:parent()
 			end
 
-			return in_math and not in_string
+			if in_math and not in_string then
+				return true
+			end
+
+			-- If there's an error, fall back to $ counting
+			if has_error then
+				return in_dollar_math(buf, row, col)
+			end
 		end
 	end
 
@@ -105,9 +147,8 @@ local function typst_in_math(buf, row, col)
 		end
 	end
 
-	-- If treesitter isn't ready, don't prettify math_only symbols
-	-- (better to show nothing than show in wrong context)
-	return false
+	-- Final fallback: check $...$ directly
+	return in_dollar_math(buf, row, col)
 end
 
 ---Check math context for LaTeX using Tree-sitter (fallback to syntax)

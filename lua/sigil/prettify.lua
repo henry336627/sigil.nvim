@@ -7,7 +7,7 @@ local extmark = require("sigil.extmark")
 local M = {}
 
 ---Normalize symbols to a sorted list
----@param symbols table<string, string>|table[] Map or list of {pattern, replacement}
+---@param symbols table<string, string>|table[] Map or list of {pattern, replacement, boundary?}
 ---@return table[] sorted list
 local function normalize_symbols(symbols)
 	if symbols[1] and symbols[1].pattern then
@@ -16,6 +16,7 @@ local function normalize_symbols(symbols)
 
 	local sorted = {}
 	for pattern, replacement in pairs(symbols) do
+		-- Simple map format doesn't support boundary, use default
 		table.insert(sorted, { pattern = pattern, replacement = replacement })
 	end
 	table.sort(sorted, function(a, b)
@@ -68,20 +69,26 @@ function M.find_matches(line, symbols)
 
 			if not already_matched then
 				-- Check word boundaries for alphabetic patterns
+				-- boundary option: "both" (default), "left", "right", "none"
+				local boundary = sym.boundary or "both"
 				local is_valid = true
+				local check_left = boundary == "both" or boundary == "left"
+				local check_right = boundary == "both" or boundary == "right"
 
-				if pattern:match("^%a") then
+				if check_left and pattern:match("^%a") then
 					-- Pattern starts with letter - check left boundary
+					-- Note: _ and ^ are math operators (subscript/superscript), not word chars
 					if match_start > 1 then
 						local char_before = line:sub(match_start - 1, match_start - 1)
-						if char_before:match("[%w_]") then
+						if char_before:match("[%w]") then
 							is_valid = false
 						end
 					end
 				end
 
-				if is_valid and pattern:match("%a$") then
+				if is_valid and check_right and pattern:match("%a$") then
 					-- Pattern ends with letter - check right boundary
+					-- Note: _ is kept here since sum_ without boundary=left shouldn't match
 					if match_end < #line then
 						local char_after = line:sub(match_end + 1, match_end + 1)
 						if char_after:match("[%w_]") then

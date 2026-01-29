@@ -16,6 +16,10 @@ Inspired by Emacs `prettify-symbols-mode`.
 - `tests/` — plenary.nvim tests
 - `examples/` — working examples for each implemented phase
 
+## User Config
+
+User's plugin configuration: `~/.config/nvim/lua/plugins/sigil.lua`
+
 ## Examples
 
 The `examples/` directory contains working Lua files demonstrating each phase's functionality.

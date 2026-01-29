@@ -102,6 +102,61 @@ describe("sigil.prettify", function()
 			local matches = prettify.find_matches("hello world", test_symbols)
 			assert.equals(0, #matches)
 		end)
+
+		it("should respect boundary='left' option", function()
+			local symbols = {
+				{ pattern = "sum", replacement = "∑", boundary = "left" },
+			}
+			-- sum_i should match (only left boundary checked)
+			local matches = prettify.find_matches("sum_i=0", symbols)
+			assert.equals(1, #matches)
+			assert.equals("∑", matches[1].replacement)
+
+			-- xsum should NOT match (left boundary violated)
+			matches = prettify.find_matches("xsum_i", symbols)
+			assert.equals(0, #matches)
+		end)
+
+		it("should respect boundary='right' option", function()
+			local symbols = {
+				{ pattern = "sum", replacement = "∑", boundary = "right" },
+			}
+			-- xsum should match (only right boundary checked)
+			local matches = prettify.find_matches("xsum y", symbols)
+			assert.equals(1, #matches)
+			assert.equals("∑", matches[1].replacement)
+
+			-- sum_i should NOT match (right boundary violated)
+			matches = prettify.find_matches("sum_i", symbols)
+			assert.equals(0, #matches)
+		end)
+
+		it("should respect boundary='none' option", function()
+			local symbols = {
+				{ pattern = "sum", replacement = "∑", boundary = "none" },
+			}
+			-- xsum_i should match (no boundaries checked)
+			local matches = prettify.find_matches("xsum_i", symbols)
+			assert.equals(1, #matches)
+			assert.equals("∑", matches[1].replacement)
+		end)
+
+		it("should use boundary='both' by default", function()
+			local symbols = {
+				{ pattern = "sum", replacement = "∑" },
+			}
+			-- sum alone should match
+			local matches = prettify.find_matches("x sum y", symbols)
+			assert.equals(1, #matches)
+
+			-- xsum should NOT match
+			matches = prettify.find_matches("xsum", symbols)
+			assert.equals(0, #matches)
+
+			-- sum_i should NOT match
+			matches = prettify.find_matches("sum_i", symbols)
+			assert.equals(0, #matches)
+		end)
 	end)
 
 	describe("prettify_buffer", function()

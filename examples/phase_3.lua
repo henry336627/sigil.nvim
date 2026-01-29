@@ -69,3 +69,38 @@ local nothing = nil
 --   predicate = function(ctx) return ctx.pattern == "->" end
 -- })
 -- :lua require("sigil").refresh()
+
+-- ============================================
+-- Тест boundary опции для символов:
+-- ============================================
+--
+-- Опция boundary управляет проверкой границ слова:
+--   "both"  - проверять обе границы (по умолчанию)
+--   "left"  - проверять только левую границу
+--   "right" - проверять только правую границу
+--   "none"  - не проверять границы
+--
+-- Пример: sum_i=0^n - хотим чтобы sum стал ∑, но i осталось
+--
+-- :lua require("sigil").setup({
+--   symbols = {
+--     { pattern = "sum", replacement = "∑", boundary = "left" },
+--     { pattern = "prod", replacement = "∏", boundary = "left" },
+--     { pattern = "int", replacement = "∫", boundary = "left" },
+--     { pattern = "->", replacement = "→" },
+--   }
+-- })
+-- :lua require("sigil").refresh()
+--
+-- Теперь:
+--   sum_i=0^n  ->  ∑_i=0^n  (sum заменяется, т.к. левая граница OK)
+--   xsum       ->  xsum     (не заменяется, т.к. левая граница нарушена)
+--   forall x   ->  ∀ x      (если boundary = "both", проверяются обе)
+
+-- Демо-код для тестирования boundary:
+local sum_i = 10        -- sum не заменится (boundary = "both" по умолчанию)
+local x_sum = 5         -- sum не заменится
+
+-- С boundary = "left":
+-- sum_i  ->  ∑_i   (заменится!)
+-- xsum   ->  xsum  (не заменится)

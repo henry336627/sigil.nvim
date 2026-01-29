@@ -830,6 +830,26 @@ function M.insert_move_left()
 	return call_original_mapping(buf, "<C-b>")
 end
 
+---Append after cursor (or after entire prettified symbol)
+function M.append_after()
+	local buf = vim.api.nvim_get_current_buf()
+	local cursor = vim.api.nvim_win_get_cursor(0)
+	local row = cursor[1] - 1 -- 0-indexed
+	local col = cursor[2] -- 0-indexed
+
+	-- Check if we're on a prettified symbol
+	local symbol = M.get_symbol_at(buf, row, col)
+
+	if symbol then
+		-- Move cursor to end of symbol and enter insert mode
+		vim.api.nvim_win_set_cursor(0, { row + 1, symbol.end_col })
+		vim.cmd("startinsert")
+	else
+		-- Normal append
+		vim.cmd("normal! a")
+	end
+end
+
 ---Substitute character under cursor (or entire prettified symbol) and enter insert mode
 function M.substitute_char()
 	local buf = vim.api.nvim_get_current_buf()
@@ -1311,8 +1331,9 @@ function M.setup_keymaps(buf)
 		{ buffer = buf, silent = true, expr = true, replace_keycodes = false }
 	)
 
-	-- Change operations
+	-- Change/insert operations
 	vim.keymap.set("n", "s", M.substitute_char, opts)
+	vim.keymap.set("n", "a", M.append_after, opts)
 	vim.keymap.set("n", "c", M.change_operator, { buffer = buf, silent = true, expr = true })
 	vim.keymap.set("n", "cc", M.change_line, opts)
 
@@ -1347,8 +1368,9 @@ function M.remove_keymaps(buf)
 	pcall(vim.keymap.del, "i", "<C-f>", { buffer = buf })
 	pcall(vim.keymap.del, "i", "<C-b>", { buffer = buf })
 
-	-- Change operations
+	-- Change/insert operations
 	pcall(vim.keymap.del, "n", "s", { buffer = buf })
+	pcall(vim.keymap.del, "n", "a", { buffer = buf })
 	pcall(vim.keymap.del, "n", "c", { buffer = buf })
 	pcall(vim.keymap.del, "n", "cc", { buffer = buf })
 

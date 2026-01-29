@@ -65,7 +65,29 @@ function M.setup(opts)
 	}
 end
 
----Get symbols for a specific filetype
+---Check if symbols table is in list format (array of objects with pattern field)
+---@param symbols table
+---@return boolean
+local function is_list_format(symbols)
+	return symbols[1] ~= nil and type(symbols[1]) == "table" and symbols[1].pattern ~= nil
+end
+
+---Normalize symbols from either format to list format
+---@param symbols table Map or list format
+---@return table[] List of {pattern, replacement, boundary?}
+local function normalize_symbols(symbols)
+	if is_list_format(symbols) then
+		return symbols
+	end
+
+	local result = {}
+	for pattern, replacement in pairs(symbols) do
+		table.insert(result, { pattern = pattern, replacement = replacement })
+	end
+	return result
+end
+
+---Get symbols for a specific filetype (returns map format for backward compat)
 ---@param ft string
 ---@return table<string, string>
 function M.get_symbols(ft)
@@ -74,15 +96,19 @@ function M.get_symbols(ft)
 	end
 
 	local symbols = {}
-	for key, value in pairs(M.current.symbols) do
-		symbols[key] = value
+
+	-- Add global symbols
+	local global = normalize_symbols(M.current.symbols)
+	for _, sym in ipairs(global) do
+		symbols[sym.pattern] = sym.replacement
 	end
 
 	-- Merge filetype-specific symbols
 	local ft_symbols = M.current.filetype_symbols[ft]
 	if ft_symbols then
-		for key, value in pairs(ft_symbols) do
-			symbols[key] = value
+		local ft_normalized = normalize_symbols(ft_symbols)
+		for _, sym in ipairs(ft_normalized) do
+			symbols[sym.pattern] = sym.replacement
 		end
 	end
 
@@ -90,19 +116,43 @@ function M.get_symbols(ft)
 	return symbols
 end
 
----Get sorted symbols list for a filetype
+---Get sorted symbols list for a filetype (preserves boundary and other options)
 ---@param ft string
----@return table[] List of {pattern, replacement}
+---@return table[] List of {pattern, replacement, boundary?}
 function M.get_sorted_symbols(ft)
 	if M._cache.sorted_symbols[ft] then
 		return M._cache.sorted_symbols[ft]
 	end
 
-	local symbols = M.get_symbols(ft)
 	local sorted = {}
-	for pattern, replacement in pairs(symbols) do
-		table.insert(sorted, { pattern = pattern, replacement = replacement })
+
+	-- Add global symbols
+	local global = normalize_symbols(M.current.symbols)
+	for _, sym in ipairs(global) do
+		table.insert(sorted, vim.deepcopy(sym))
 	end
+
+	-- Merge filetype-specific symbols (override by pattern)
+	local ft_symbols = M.current.filetype_symbols[ft]
+	if ft_symbols then
+		local ft_normalized = normalize_symbols(ft_symbols)
+		-- Build a map of existing patterns for quick lookup
+		local pattern_idx = {}
+		for i, sym in ipairs(sorted) do
+			pattern_idx[sym.pattern] = i
+		end
+		-- Add or replace filetype symbols
+		for _, sym in ipairs(ft_normalized) do
+			local idx = pattern_idx[sym.pattern]
+			if idx then
+				sorted[idx] = vim.deepcopy(sym)
+			else
+				table.insert(sorted, vim.deepcopy(sym))
+			end
+		end
+	end
+
+	-- Sort by pattern length (longest first)
 	table.sort(sorted, function(a, b)
 		return #a.pattern > #b.pattern
 	end)
