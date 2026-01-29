@@ -5,6 +5,7 @@ local state = require("sigil.state")
 local prettify = require("sigil.prettify")
 local motions = require("sigil.motions")
 local visual = require("sigil.visual")
+local unprettify = require("sigil.unprettify")
 local M = {}
 
 ---Augroup for sigil autocmds
@@ -48,8 +49,9 @@ function M.attach(buf)
 	end
 	prettify.prettify_buffer(buf)
 
-	-- Setup atomic motions if enabled
-	if config.current.atomic_motions then
+	-- Setup atomic motions if enabled (but not when unprettify_at_point is active)
+	-- When unprettify_at_point is on, cursor shows original text, so normal motions are appropriate
+	if config.current.atomic_motions and not config.current.unprettify_at_point then
 		motions.setup_keymaps(buf)
 	end
 
@@ -63,13 +65,16 @@ end
 ---Detach from a buffer
 ---@param buf integer
 function M.detach(buf)
-	-- Remove atomic motions keymaps
-	if config.current.atomic_motions then
+	-- Remove atomic motions keymaps (only if they were set up)
+	if config.current.atomic_motions and not config.current.unprettify_at_point then
 		motions.remove_keymaps(buf)
 	end
 
 	-- Clear visual overlays
 	visual.clear(buf)
+
+	-- Clear unprettify state
+	unprettify.clear(buf)
 
 	-- Clean up pending timer
 	local pending = M._pending[buf]
@@ -278,12 +283,16 @@ function M.setup_buffer_autocmds(buf)
 		end,
 	})
 
-	-- Update visual overlays while selecting
+	-- Update visual overlays while selecting and handle unprettify at point
 	vim.api.nvim_create_autocmd({ "ModeChanged", "CursorMoved" }, {
 		group = M.augroup,
 		buffer = buf,
 		callback = function()
 			visual.update(buf)
+			-- Update unprettify at point
+			if config.current.unprettify_at_point then
+				unprettify.update(buf)
+			end
 			-- Maintain desired byte column for vertical motions.
 			local cursor = vim.api.nvim_win_get_cursor(0)
 			if vim.w.sigil_vert_active then
@@ -293,6 +302,17 @@ function M.setup_buffer_autocmds(buf)
 			end
 		end,
 	})
+
+	-- Also update unprettify on CursorMovedI (insert mode)
+	if config.current.unprettify_at_point then
+		vim.api.nvim_create_autocmd("CursorMovedI", {
+			group = M.augroup,
+			buffer = buf,
+			callback = function()
+				unprettify.update(buf)
+			end,
+		})
+	end
 end
 
 ---Initialize manager (setup global autocmds)

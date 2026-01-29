@@ -47,11 +47,11 @@ Create a Neovim plugin that visually replaces text patterns with Unicode symbols
   - [ ] 6.2 Add README.md with usage examples
   - [ ] 6.3 Final review and cleanup
 
-- [ ] Phase 7: Optional - Unprettify at Point
-  - [ ] 7.1 Implement cursor position tracking
-  - [ ] 7.2 Show original text when cursor is on prettified symbol
-  - [ ] 7.3 Add `unprettify_at_point` config option (nil, true, 'right-edge')
-  - [ ] 7.4 Write tests for unprettify behavior
+- [x] Phase 7: Optional - Unprettify at Point
+  - [x] 7.1 Implement cursor position tracking
+  - [x] 7.2 Show original text when cursor is on prettified symbol
+  - [x] 7.3 Add `unprettify_at_point` config option (nil, true, 'right-edge')
+  - [x] 7.4 Write tests for unprettify behavior
 
 - [ ] Phase 8: Performance Optimization
   - [x] 8.1 Use `nvim_buf_attach` for incremental updates (only changed lines)
