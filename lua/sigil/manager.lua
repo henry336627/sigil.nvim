@@ -14,6 +14,40 @@ M.augroup = vim.api.nvim_create_augroup("Sigil", { clear = true })
 ---@type table<integer, { start: integer, clear_end: integer, prettify_end: integer, timer: uv_timer_t? }>
 M._pending = {}
 
+---@type table<integer, uv_timer_t?>
+M._lazy_timers = {}
+
+---Get visible line range for buffer with optional buffer zone
+---@param buf integer
+---@param buffer_lines? integer Lines to add above/below visible area
+---@return integer start_row 0-indexed
+---@return integer end_row 0-indexed, exclusive
+local function get_visible_range(buf, buffer_lines)
+	buffer_lines = buffer_lines or config.current.lazy_prettify_buffer or 50
+	local wins = vim.fn.win_findbuf(buf)
+	local line_count = vim.api.nvim_buf_line_count(buf)
+
+	if #wins == 0 then
+		-- No window showing buffer, return empty range (will prettify on BufWinEnter)
+		return 0, 0
+	end
+
+	-- Find union of all windows showing this buffer
+	local min_row, max_row = math.huge, 0
+	for _, win in ipairs(wins) do
+		local top = vim.fn.line("w0", win) - 1 -- Convert to 0-indexed
+		local bot = vim.fn.line("w$", win) -- Already end-exclusive
+		min_row = math.min(min_row, top)
+		max_row = math.max(max_row, bot)
+	end
+
+	-- Add buffer zone
+	min_row = math.max(0, min_row - buffer_lines)
+	max_row = math.min(line_count, max_row + buffer_lines)
+
+	return min_row, max_row
+end
+
 ---Attach to a buffer
 ---@param buf integer
 function M.attach(buf)
@@ -47,7 +81,22 @@ function M.attach(buf)
 			parser:parse()
 		end)
 	end
-	prettify.prettify_buffer(buf)
+
+	-- Check if we should use lazy prettification
+	local line_count = vim.api.nvim_buf_line_count(buf)
+	local lazy_threshold = config.current.lazy_prettify_threshold or 500
+	if lazy_threshold > 0 and line_count > lazy_threshold then
+		-- Large file: enable lazy mode and only prettify visible range
+		state.enable_lazy_mode(buf)
+		local start_row, end_row = get_visible_range(buf)
+		if end_row > start_row then
+			prettify.prettify_lines(buf, start_row, end_row)
+			state.mark_prettified(buf, start_row, end_row)
+		end
+	else
+		-- Small file: prettify everything immediately
+		prettify.prettify_buffer(buf)
+	end
 
 	-- Setup atomic motions if enabled (but not when unprettify_at_point is active)
 	-- When unprettify_at_point is on, cursor shows original text, so normal motions are appropriate
@@ -83,6 +132,13 @@ function M.detach(buf)
 		pending.timer:close()
 	end
 	M._pending[buf] = nil
+
+	-- Clean up lazy prettify timer
+	if M._lazy_timers[buf] then
+		M._lazy_timers[buf]:stop()
+		M._lazy_timers[buf]:close()
+		M._lazy_timers[buf] = nil
+	end
 
 	state.detach(buf)
 end
@@ -120,6 +176,13 @@ end
 ---@param lastline integer
 ---@param new_lastline integer
 function M.queue_update(buf, firstline, lastline, new_lastline)
+	-- Adjust lazy mode range tracking for text edits
+	local lines_removed = lastline - firstline
+	local lines_added = new_lastline - firstline
+	if lines_removed ~= lines_added then
+		state.adjust_ranges_for_edit(buf, firstline, lines_removed, lines_added)
+	end
+
 	local pending = M._pending[buf]
 	local clear_end = math.max(lastline, new_lastline)
 	if not pending then
@@ -202,6 +265,56 @@ function M.apply_pending(buf)
 	M._pending[buf] = nil
 end
 
+---Queue lazy prettification for visible range (debounced)
+---@param buf integer
+function M.queue_lazy_prettify(buf)
+	if not state.is_lazy_mode(buf) then
+		return
+	end
+
+	local delay = config.current.lazy_prettify_debounce_ms or 50
+
+	if M._lazy_timers[buf] then
+		M._lazy_timers[buf]:stop()
+	else
+		M._lazy_timers[buf] = vim.uv.new_timer()
+	end
+
+	M._lazy_timers[buf]:start(
+		delay,
+		0,
+		vim.schedule_wrap(function()
+			M.apply_lazy_prettify(buf)
+		end)
+	)
+end
+
+---Apply lazy prettification for visible range
+---@param buf integer
+function M.apply_lazy_prettify(buf)
+	if M._lazy_timers[buf] then
+		M._lazy_timers[buf]:stop()
+		M._lazy_timers[buf]:close()
+		M._lazy_timers[buf] = nil
+	end
+
+	if not state.is_enabled(buf) or not vim.api.nvim_buf_is_valid(buf) then
+		return
+	end
+
+	if not state.is_lazy_mode(buf) then
+		return
+	end
+
+	local start_row, end_row = get_visible_range(buf)
+	local unprettified = state.get_unprettified_in_range(buf, start_row, end_row)
+
+	for _, range in ipairs(unprettified) do
+		prettify.prettify_lines(buf, range[1], range[2], { clear = false })
+		state.mark_prettified(buf, range[1], range[2])
+	end
+end
+
 ---Track undo sequence for detecting undo/redo
 ---@type table<integer, integer>
 M._undo_seq = {}
@@ -222,13 +335,34 @@ function M.setup_buffer_autocmds(buf)
 		end,
 	})
 
-	-- Re-apply conceal when entering window
+	-- Re-apply conceal when entering window and trigger lazy prettify
 	vim.api.nvim_create_autocmd("BufWinEnter", {
 		group = M.augroup,
 		buffer = buf,
 		callback = function()
 			if state.is_attached(buf) then
 				M.setup_conceal(buf)
+				-- Trigger lazy prettify for visible range
+				if state.is_lazy_mode(buf) then
+					M.queue_lazy_prettify(buf)
+				end
+			end
+		end,
+	})
+
+	-- Lazy prettify on scroll
+	vim.api.nvim_create_autocmd("WinScrolled", {
+		group = M.augroup,
+		callback = function()
+			-- WinScrolled is not buffer-specific, so check if this buffer is in any scrolled window
+			local wins = vim.fn.win_findbuf(buf)
+			for _, win in ipairs(wins) do
+				if vim.v.event and vim.v.event[tostring(win)] then
+					if state.is_enabled(buf) and state.is_lazy_mode(buf) then
+						M.queue_lazy_prettify(buf)
+					end
+					break
+				end
 			end
 		end,
 	})
@@ -256,7 +390,19 @@ function M.setup_buffer_autocmds(buf)
 								parser:parse()
 							end)
 						end
-						prettify.refresh(buf)
+						-- Reset lazy tracking and refresh
+						if state.is_lazy_mode(buf) then
+							state.clear_prettified_tracking(buf)
+							-- Re-prettify visible range only
+							local start_row, end_row = get_visible_range(buf)
+							state.clear_lines(buf, 0, -1)
+							if end_row > start_row then
+								prettify.prettify_lines(buf, start_row, end_row)
+								state.mark_prettified(buf, start_row, end_row)
+							end
+						else
+							prettify.refresh(buf)
+						end
 					end
 				end)
 			end
