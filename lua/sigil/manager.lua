@@ -38,22 +38,15 @@ function M.attach(buf)
 	-- Set conceal options for buffer window(s)
 	M.setup_conceal(buf)
 
-	-- Initial prettification (may be incomplete if treesitter not ready)
+	-- Initial prettification
+	-- Force Tree-sitter to parse first if available, then prettify
+	local ok, parser = pcall(vim.treesitter.get_parser, buf)
+	if ok and parser then
+		pcall(function()
+			parser:parse()
+		end)
+	end
 	prettify.prettify_buffer(buf)
-
-	-- Delayed re-prettify after forcing treesitter parse
-	vim.defer_fn(function()
-		if vim.api.nvim_buf_is_valid(buf) and state.is_enabled(buf) then
-			-- Force treesitter to parse if available
-			local ok, parser = pcall(vim.treesitter.get_parser, buf)
-			if ok and parser then
-				pcall(function()
-					parser:parse()
-				end)
-			end
-			prettify.refresh(buf)
-		end
-	end, 50)
 
 	-- Setup atomic motions if enabled
 	if config.current.atomic_motions then
@@ -247,11 +240,11 @@ function M.setup_buffer_autocmds(buf)
 			local prev_seq = M._undo_seq[buf] or 0
 			M._undo_seq[buf] = seq
 			-- If sequence went backward (undo) or jumped (redo), do full refresh
-			-- Use defer to let Tree-sitter update its parse tree first
+			-- Use vim.schedule to run after Tree-sitter has updated (next event loop)
 			if seq < prev_seq or seq > prev_seq + 1 then
-				vim.defer_fn(function()
+				vim.schedule(function()
 					if vim.api.nvim_buf_is_valid(buf) and state.is_enabled(buf) then
-						-- Force Tree-sitter to parse
+						-- Force Tree-sitter to parse synchronously
 						local ok, parser = pcall(vim.treesitter.get_parser, buf)
 						if ok and parser then
 							pcall(function()
@@ -260,7 +253,7 @@ function M.setup_buffer_autocmds(buf)
 						end
 						prettify.refresh(buf)
 					end
-				end, 10)
+				end)
 			end
 		end,
 	})
