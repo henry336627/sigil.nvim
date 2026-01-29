@@ -258,6 +258,26 @@ function M.setup_buffer_autocmds(buf)
 		end,
 	})
 
+	-- Adjust cursor position after leaving insert mode
+	-- (Vim moves cursor left on Esc, which can land inside a concealed symbol)
+	vim.api.nvim_create_autocmd("InsertLeave", {
+		group = M.augroup,
+		buffer = buf,
+		callback = function()
+			if not state.is_enabled(buf) then
+				return
+			end
+			local cursor = vim.api.nvim_win_get_cursor(0)
+			local row = cursor[1] - 1
+			local col = cursor[2]
+			local symbol = motions.get_symbol_at(buf, row, col)
+			if symbol and col > symbol.start_col then
+				-- Cursor is inside symbol, move to start
+				vim.api.nvim_win_set_cursor(0, { row + 1, symbol.start_col })
+			end
+		end,
+	})
+
 	-- Update visual overlays while selecting
 	vim.api.nvim_create_autocmd({ "ModeChanged", "CursorMoved" }, {
 		group = M.augroup,
