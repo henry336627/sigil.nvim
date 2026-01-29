@@ -235,7 +235,7 @@ function M.setup_buffer_autocmds(buf)
 		end,
 	})
 
-	-- Detect undo/redo and do full refresh
+	-- Detect undo/redo and refresh buffer
 	vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
 		group = M.augroup,
 		buffer = buf,
@@ -247,8 +247,20 @@ function M.setup_buffer_autocmds(buf)
 			local prev_seq = M._undo_seq[buf] or 0
 			M._undo_seq[buf] = seq
 			-- If sequence went backward (undo) or jumped (redo), do full refresh
+			-- Use defer to let Tree-sitter update its parse tree first
 			if seq < prev_seq or seq > prev_seq + 1 then
-				prettify.refresh(buf)
+				vim.defer_fn(function()
+					if vim.api.nvim_buf_is_valid(buf) and state.is_enabled(buf) then
+						-- Force Tree-sitter to parse
+						local ok, parser = pcall(vim.treesitter.get_parser, buf)
+						if ok and parser then
+							pcall(function()
+								parser:parse()
+							end)
+						end
+						prettify.refresh(buf)
+					end
+				end, 10)
 			end
 		end,
 	})
