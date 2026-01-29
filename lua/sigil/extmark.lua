@@ -23,7 +23,10 @@ function M.create(buf, row, col, end_col, replacement)
 		-- No explicit highlight: lets Visual selection background show through.
 		virt_text = { { replacement } },
 		virt_text_pos = "overlay",
-		virt_text_hide = true,
+		-- Keep virt_text visible even when cursor is inside the extmark.
+		-- This ensures consistent visual feedback during navigation.
+		-- With hide=true, cursor inside symbol shows a space (confusing after undo).
+		virt_text_hide = false,
 		hl_mode = "combine",
 		priority = 100,
 	}

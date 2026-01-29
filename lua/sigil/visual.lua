@@ -84,7 +84,14 @@ function M.update(buf)
 
 	-- Check if selection changed
 	local st = M._state[buf]
-	if st and st.mode == mode and st.sr == start_row and st.sc == start_col and st.er == end_row and st.ec == end_col then
+	if
+		st
+		and st.mode == mode
+		and st.sr == start_row
+		and st.sc == start_col
+		and st.er == end_row
+		and st.ec == end_col
+	then
 		return -- No change, skip update
 	end
 

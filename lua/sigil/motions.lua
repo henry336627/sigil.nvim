@@ -373,7 +373,21 @@ function M.move_right()
 		local line_len = #line
 
 		if symbol.end_col < line_len then
-			vim.api.nvim_win_set_cursor(0, { row + 1, symbol.end_col })
+			local target_col = symbol.end_col
+			-- If landing on a space, skip to next non-space (or next symbol)
+			local char_at_target = line:sub(target_col + 1, target_col + 1)
+			if char_at_target == " " then
+				-- Check if there's a symbol right after the space
+				local next_sym = next_symbol(symbols, target_col)
+				if next_sym and next_sym.start_col == target_col + 1 then
+					-- Next char is start of another symbol, move there
+					target_col = target_col + 1
+				elseif target_col + 1 < line_len then
+					-- Skip the space
+					target_col = target_col + 1
+				end
+			end
+			vim.api.nvim_win_set_cursor(0, { row + 1, target_col })
 			return
 		end
 	end

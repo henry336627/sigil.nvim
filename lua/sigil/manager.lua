@@ -158,9 +158,13 @@ function M.queue_update(buf, firstline, lastline, new_lastline)
 		pending.timer = vim.uv.new_timer()
 	end
 
-	pending.timer:start(delay, 0, vim.schedule_wrap(function()
-		M.apply_pending(buf)
-	end))
+	pending.timer:start(
+		delay,
+		0,
+		vim.schedule_wrap(function()
+			M.apply_pending(buf)
+		end)
+	)
 end
 
 ---Apply queued update for a buffer
