@@ -845,8 +845,16 @@ function M.append_after()
 		vim.api.nvim_win_set_cursor(0, { row + 1, symbol.end_col })
 		vim.cmd("startinsert")
 	else
-		-- Normal append
-		vim.cmd("normal! a")
+		-- Normal append: move cursor right and enter insert mode
+		local line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1] or ""
+		if #line == 0 then
+			-- Empty line: just start insert
+			vim.cmd("startinsert")
+		else
+			-- Move past current char and start insert
+			vim.api.nvim_win_set_cursor(0, { row + 1, col + 1 })
+			vim.cmd("startinsert")
+		end
 	end
 end
 

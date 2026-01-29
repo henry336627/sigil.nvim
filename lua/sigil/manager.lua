@@ -204,14 +204,22 @@ function M.apply_pending(buf)
 	M._pending[buf] = nil
 end
 
+---Track undo sequence for detecting undo/redo
+---@type table<integer, integer>
+M._undo_seq = {}
+
 ---Setup buffer-local autocmds
 ---@param buf integer
 function M.setup_buffer_autocmds(buf)
+	-- Initialize undo tracking
+	M._undo_seq[buf] = vim.fn.undotree().seq_cur or 0
+
 	-- Cleanup on buffer delete
 	vim.api.nvim_create_autocmd("BufDelete", {
 		group = M.augroup,
 		buffer = buf,
 		callback = function()
+			M._undo_seq[buf] = nil
 			M.detach(buf)
 		end,
 	})
@@ -223,6 +231,24 @@ function M.setup_buffer_autocmds(buf)
 		callback = function()
 			if state.is_attached(buf) then
 				M.setup_conceal(buf)
+			end
+		end,
+	})
+
+	-- Detect undo/redo and do full refresh
+	vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+		group = M.augroup,
+		buffer = buf,
+		callback = function()
+			if not state.is_enabled(buf) then
+				return
+			end
+			local seq = vim.fn.undotree().seq_cur or 0
+			local prev_seq = M._undo_seq[buf] or 0
+			M._undo_seq[buf] = seq
+			-- If sequence went backward (undo) or jumped (redo), do full refresh
+			if seq < prev_seq or seq > prev_seq + 1 then
+				prettify.refresh(buf)
 			end
 		end,
 	})
