@@ -27,20 +27,20 @@ Create a Neovim plugin that visually replaces text patterns with Unicode symbols
   - [x] 3.4 Allow custom predicates per filetype
   - [x] 3.5 Write tests for predicate system
 
-- [ ] Phase 4: Atomic Symbol Motions
+- [x] Phase 4: Atomic Symbol Motions
   - [x] 4.1 Create module for cursor position detection on prettified symbols
   - [x] 4.2 Implement motion remaps (`l`, `h`) to skip over entire symbol
   - [x] 4.3 Implement word motions (`w`, `b`, `e`) awareness of symbol boundaries
   - [x] 4.4 Implement delete (`x`, `X`) to delete entire prettified symbol
   - [x] 4.5 Implement change (`s`, `c`) to replace entire prettified symbol
   - [x] 4.6 Handle visual mode selections across prettified symbols
-  - [ ] 4.7 Write tests for atomic motions
+  - [x] 4.7 Write tests for atomic motions
 
-- [ ] Phase 5: Commands and API
+- [x] Phase 5: Commands and API
   - [x] 5.1 Add `:Sigil` toggle command
   - [x] 5.2 Add `:SigilEnable` / `:SigilDisable` commands
   - [x] 5.3 Expose public API for programmatic control
-  - [ ] 5.4 Write tests for commands
+  - [x] 5.4 Write tests for commands
 
 - [ ] Phase 6: Documentation and Polish
   - [ ] 6.1 Write vimdoc help file (`doc/sigil.txt`)
@@ -63,7 +63,6 @@ Create a Neovim plugin that visually replaces text patterns with Unicode symbols
 
 ## Blocked / Open Questions
 - [ ] Multi-character replacement display (compose vs single char)?
-- [ ] Visual selection highlight on prettified symbols (conceal doesn't show selection)
 
 ## Decisions Made
 - Use extmarks with `conceal` option for symbol replacement (standard Neovim approach)

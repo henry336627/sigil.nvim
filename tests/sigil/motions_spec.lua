@@ -540,6 +540,224 @@ describe("sigil.motions", function()
 		end)
 	end)
 
+	describe("append_after", function()
+		before_each(function()
+			vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "x -> y" })
+			state.attach(buf)
+			prettify.prettify_buffer(buf)
+		end)
+
+		it("should move cursor to end of symbol and enter insert mode", function()
+			-- Start on '->' at col 2
+			vim.api.nvim_win_set_cursor(0, { 1, 2 })
+			motions.append_after()
+
+			local cursor = vim.api.nvim_win_get_cursor(0)
+			-- Should be at col 4 (after '->')
+			assert.equals(4, cursor[2])
+
+			vim.cmd("stopinsert")
+		end)
+
+		it("should behave like normal 'a' when not on symbol", function()
+			-- Start at col 0 ('x')
+			vim.api.nvim_win_set_cursor(0, { 1, 0 })
+			motions.append_after()
+
+			local cursor = vim.api.nvim_win_get_cursor(0)
+			-- Should be at col 1 (after 'x')
+			assert.equals(1, cursor[2])
+
+			vim.cmd("stopinsert")
+		end)
+
+		it("should handle cursor inside symbol", function()
+			-- Start inside '->' at col 3 (on '>')
+			vim.api.nvim_win_set_cursor(0, { 1, 3 })
+			motions.append_after()
+
+			local cursor = vim.api.nvim_win_get_cursor(0)
+			-- Should be at col 4 (after '->')
+			assert.equals(4, cursor[2])
+
+			vim.cmd("stopinsert")
+		end)
+	end)
+
+	describe("insert_move_right", function()
+		-- Helper to convert key notation to terminal codes
+		local function termcodes(str)
+			return vim.api.nvim_replace_termcodes(str, true, false, true)
+		end
+
+		before_each(function()
+			vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "x -> y" })
+			state.attach(buf)
+			prettify.prettify_buffer(buf)
+		end)
+
+		it("should skip over symbol when cursor is on it", function()
+			-- Start on '->' at col 2
+			vim.api.nvim_win_set_cursor(0, { 1, 2 })
+			local res = motions.insert_move_right()
+
+			-- '->' is 2 chars, should return 2 <Right> presses
+			assert.equals(string.rep(termcodes("<Right>"), 2), res)
+		end)
+
+		it("should return default when not on symbol", function()
+			-- Start at col 0 ('x')
+			vim.api.nvim_win_set_cursor(0, { 1, 0 })
+			local res = motions.insert_move_right()
+
+			-- Should return default <C-f> terminal code
+			assert.equals(termcodes("<C-f>"), res)
+		end)
+
+		it("should return default when at end of line", function()
+			vim.api.nvim_win_set_cursor(0, { 1, 5 })
+			local res = motions.insert_move_right()
+
+			-- At last char 'y', col 5, line length is 6 so col < #line
+			-- Since 'y' is not a symbol, should return <C-f>
+			assert.equals(termcodes("<C-f>"), res)
+		end)
+	end)
+
+	describe("insert_move_left", function()
+		-- Helper to convert key notation to terminal codes
+		local function termcodes(str)
+			return vim.api.nvim_replace_termcodes(str, true, false, true)
+		end
+
+		before_each(function()
+			vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "x -> y" })
+			state.attach(buf)
+			prettify.prettify_buffer(buf)
+		end)
+
+		it("should skip over symbol when cursor is immediately after it", function()
+			-- Start at col 4 (space after '->')
+			vim.api.nvim_win_set_cursor(0, { 1, 4 })
+			local res = motions.insert_move_left()
+
+			-- '->' is 2 chars starting at col 2; cursor at col 4
+			-- col - start_col = 4 - 2 = 2 chars to skip
+			assert.equals(string.rep(termcodes("<Left>"), 2), res)
+		end)
+
+		it("should return default when not after symbol", function()
+			-- Start at col 5 ('y')
+			vim.api.nvim_win_set_cursor(0, { 1, 5 })
+			local res = motions.insert_move_left()
+
+			-- Position before is space (col 4), not a symbol
+			assert.equals(termcodes("<C-b>"), res)
+		end)
+
+		it("should return default at start of line", function()
+			vim.api.nvim_win_set_cursor(0, { 1, 0 })
+			local res = motions.insert_move_left()
+
+			assert.equals(termcodes("<C-b>"), res)
+		end)
+	end)
+
+	describe("multi-char symbols", function()
+		before_each(function()
+			vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "lambda x" })
+			state.attach(buf)
+			prettify.prettify_buffer(buf)
+		end)
+
+		it("should skip over 'lambda' with move_right", function()
+			-- Start on 'lambda' at col 0
+			vim.api.nvim_win_set_cursor(0, { 1, 0 })
+			motions.move_right()
+
+			local cursor = vim.api.nvim_win_get_cursor(0)
+			-- 'lambda' is 6 chars, should jump to col 6 (space before 'x')
+			assert.equals(6, cursor[2])
+		end)
+
+		it("should skip to start of 'lambda' with move_left", function()
+			-- Start at col 6 (space after 'lambda')
+			vim.api.nvim_win_set_cursor(0, { 1, 6 })
+			motions.move_left()
+
+			local cursor = vim.api.nvim_win_get_cursor(0)
+			-- Should land at col 0 (start of 'lambda')
+			assert.equals(0, cursor[2])
+		end)
+
+		it("should snap to start when inside 'lambda' with move_left", function()
+			-- Start inside 'lambda' at col 3 ('b')
+			vim.api.nvim_win_set_cursor(0, { 1, 3 })
+			motions.move_left()
+
+			local cursor = vim.api.nvim_win_get_cursor(0)
+			assert.equals(0, cursor[2])
+		end)
+
+		it("should delete entire 'lambda' with delete_char", function()
+			-- Start on 'lambda' at col 0
+			vim.api.nvim_win_set_cursor(0, { 1, 0 })
+			motions.delete_char()
+
+			local line = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1]
+			assert.equals(" x", line)
+		end)
+
+		it("should substitute entire 'lambda' with substitute_char", function()
+			vim.api.nvim_win_set_cursor(0, { 1, 0 })
+			motions.substitute_char()
+
+			local line = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1]
+			assert.equals(" x", line)
+
+			vim.cmd("stopinsert")
+		end)
+	end)
+
+	describe("multiple symbols on line", function()
+		before_each(function()
+			vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "x -> y -> z" })
+			state.attach(buf)
+			prettify.prettify_buffer(buf)
+		end)
+
+		it("should navigate through multiple symbols with move_right", function()
+			-- Start at col 0 ('x')
+			vim.api.nvim_win_set_cursor(0, { 1, 0 })
+			motions.move_right() -- col 1 (space)
+			motions.move_right() -- col 2 (start of first '->')
+			motions.move_right() -- col 4 (past first '->')
+
+			local cursor = vim.api.nvim_win_get_cursor(0)
+			assert.equals(4, cursor[2])
+
+			motions.move_right() -- col 5 (' ')
+			motions.move_right() -- col 6 ('y')
+			motions.move_right() -- col 7 (start of second '->')
+			motions.move_right() -- col 9 (past second '->')
+
+			cursor = vim.api.nvim_win_get_cursor(0)
+			assert.equals(9, cursor[2])
+		end)
+
+		it("should delete first symbol and keep second", function()
+			vim.api.nvim_win_set_cursor(0, { 1, 2 })
+			motions.delete_char()
+
+			local line = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1]
+			assert.equals("x  y -> z", line)
+
+			-- Second symbol should still be prettified
+			local second_arrow_col = line:find("->", 1, true)
+			assert.is_not_nil(second_arrow_col)
+		end)
+	end)
+
 	describe("keymaps", function()
 		it("should setup keymaps for buffer", function()
 			motions.setup_keymaps(buf)
