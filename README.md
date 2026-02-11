@@ -14,21 +14,21 @@ Based on the idea of Emacs [`prettify-symbols-mode`](https://www.gnu.org/softwar
 Symbols stay prettified at all times. Navigation and editing work as if
 each symbol were a single character.
 
-<!-- TODO: demo video -->
+![Atomic motions demo](demo/default_mode.gif)
 
 ### Unprettify at point (`unprettify_at_point = true`)
 
 The symbol under the cursor reverts to original text. Other symbols on
 the line remain prettified.
 
-<!-- TODO: demo video -->
+![Unprettify at point demo](demo/unprett_1.gif)
 
 ### Unprettify line (`unprettify_at_point = "line"`)
 
 All symbols on the cursor line revert to original text. When the cursor
 moves to another line, the previous line is re-prettified.
 
-<!-- TODO: demo video -->
+![Unprettify line demo](demo/unprett_2.gif)
 
 ## Features
 
