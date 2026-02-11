@@ -501,7 +501,7 @@ describe("sigil.config structured symbol subtables", function()
 		}))
 	end)
 
-	it("should still work with flat format (backward compat)", function()
+	it("should still work with flat format", function()
 		config.setup({
 			filetype_symbols = {
 				lua = {

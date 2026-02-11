@@ -104,7 +104,7 @@ local function is_structured_format(symbols)
 	return type(symbols) == "table" and (symbols.math ~= nil or symbols.text ~= nil or symbols.any ~= nil)
 end
 
----Get symbols for a specific filetype (returns map format for backward compat)
+---Get symbols for a specific filetype (returns map format)
 ---@param ft string
 ---@return table<string, string>
 function M.get_symbols(ft)
@@ -272,7 +272,7 @@ function M.get_predicate(ft)
 		end
 	end
 
-	-- Merge with filetype_symbol_contexts (backward compat)
+	-- Merge with filetype_symbol_contexts
 	local context_spec = M.current.filetype_symbol_contexts and M.current.filetype_symbol_contexts[ft]
 	if context_spec then
 		local math_list = context_spec.math_only or context_spec.math or {}

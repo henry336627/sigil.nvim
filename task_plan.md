@@ -43,7 +43,7 @@ Create a Neovim plugin that visually replaces text patterns with Unicode symbols
   - [x] 5.4 Write tests for commands
 
 - [ ] Phase 6: Documentation and Polish
-  - [ ] 6.1 Write vimdoc help file (`doc/sigil.txt`)
+  - [x] 6.1 Write vimdoc help file (`doc/sigil.txt`)
   - [ ] 6.2 Add README.md with usage examples
   - [ ] 6.3 Final review and cleanup
 

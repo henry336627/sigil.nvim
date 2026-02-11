@@ -1,6 +1,6 @@
 *sigil.txt*                        Prettify symbols for Neovim
 
-Author: chestnykh
+Author: Vadim Pavlov
 License: MIT
 
 ==============================================================================
@@ -622,28 +622,6 @@ You can provide a custom context predicate: >lua
     end,
   }
 <
-                                        *sigil-config-symbol-contexts-legacy*
-Legacy alternative: `filetype_symbol_contexts` ~
-
-The `filetype_symbol_contexts` option still works for backward compatibility.
-It uses a flat symbol list and a separate list of pattern names to mark as
-math-only or text-only: >lua
-
-  local typst_symbols = {
-    { pattern = "alpha", replacement = "α", boundary = "left" },
-    { pattern = "->",    replacement = "→" },
-  }
-  local math_only = { "alpha" }
-
-  require("sigil").setup({
-    filetype_symbols = { typst = typst_symbols },
-    filetype_symbol_contexts = {
-      typst = { math_only = math_only },
-    },
-  })
-<
-Structured subtables (above) are preferred because they avoid the
-duplication of listing patterns in two places.
 ==============================================================================
 10. ATOMIC MOTIONS                                          *sigil-motions*
 
@@ -708,9 +686,13 @@ rather than a confusing partial highlight.
 ==============================================================================
 11. UNPRETTIFY AT POINT                                   *sigil-unprettify*
 
-This feature lets you peek at the original text without disabling sigil.
-Especially useful when editing LaTeX or Typst, where you need to see the
-actual commands to modify them.
+By default, unprettify is disabled (`nil`). This is the recommended
+setting: symbols stay prettified at all times and atomic motions
+(|sigil-motions|) handle navigation and editing through them.
+
+If you prefer to see the original text near the cursor, you can enable
+one of the unprettify modes below. Note that both modes disable atomic
+motions.
 
 When `unprettify_at_point = true`:
   The symbol under the cursor reverts to original text. For example, if the
@@ -721,8 +703,7 @@ When `unprettify_at_point = "line"`:
   Every symbol on the cursor line reverts to original text. A line like
   `$α + β = γ$` becomes `$\alpha + \beta = \gamma$` when the cursor is on
   it. When the cursor moves to a different line, all symbols on the previous
-  line are re-prettified. This is the recommended mode for LaTeX editing --
-  it gives a VimTeX-like experience.
+  line are re-prettified. This gives a VimTeX-like experience.
 
 Both modes work in normal, insert, and visual modes. The unprettify state
 survives undo/redo: if you undo a change and the cursor stays on a symbol,
@@ -906,7 +887,7 @@ Use the `math` subtable to declare this directly: >lua
         },
       },
     },
-    unprettify_at_point = true,
+    unprettify_at_point = false,
   })
 <
 LaTeX + Typst combined ~
@@ -923,7 +904,7 @@ You can configure both in a single setup call: >lua
         math = typst_math_symbols,  -- from Typst recipe above
       },
     },
-    unprettify_at_point = "line",
+    unprettify_at_point = false,
   })
 <
 Generic programming languages ~
