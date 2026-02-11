@@ -187,7 +187,12 @@ function M.update(buf)
 
 	-- If we have an unprettified symbol, check if cursor is still on it
 	if current_state then
-		if cursor_in_unprettified(current_state, row, col) then
+		-- Verify the extmark still exists (may have been deleted by refresh/undo)
+		local ok, marks = pcall(vim.api.nvim_buf_get_extmarks, buf, state.ns, current_state.id, current_state.id, {})
+		if not ok or #marks == 0 then
+			-- Extmark was deleted (e.g., by undo/refresh), clear stale state
+			M._state[buf] = nil
+		elseif cursor_in_unprettified(current_state, row, col) then
 			-- Check right-edge mode
 			local mode = config.current.unprettify_at_point
 			if mode == "right-edge" and col <= current_state.col then

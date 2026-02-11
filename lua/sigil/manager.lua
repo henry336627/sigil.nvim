@@ -263,6 +263,11 @@ function M.apply_pending(buf)
 	end
 
 	M._pending[buf] = nil
+
+	-- Re-check unprettify at point (extmarks were recreated, old state is stale)
+	if config.current.unprettify_at_point then
+		unprettify.update(buf)
+	end
 end
 
 ---Queue lazy prettification for visible range (debounced)
@@ -312,6 +317,11 @@ function M.apply_lazy_prettify(buf)
 	for _, range in ipairs(unprettified) do
 		prettify.prettify_lines(buf, range[1], range[2], { clear = false })
 		state.mark_prettified(buf, range[1], range[2])
+	end
+
+	-- Re-check unprettify at point (new extmarks may be under cursor)
+	if config.current.unprettify_at_point then
+		unprettify.update(buf)
 	end
 end
 
@@ -402,6 +412,10 @@ function M.setup_buffer_autocmds(buf)
 							end
 						else
 							prettify.refresh(buf)
+						end
+						-- Re-check unprettify at point after undo/redo refresh
+						if config.current.unprettify_at_point then
+							unprettify.update(buf)
 						end
 					end
 				end)
