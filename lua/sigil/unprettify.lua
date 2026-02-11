@@ -113,18 +113,21 @@ local function get_line_symbols(buf, row)
 	return symbols
 end
 
----Check if any tracked extmarks still exist
+---Check if ALL tracked extmarks still exist
 ---@param buf integer
 ---@param tracked_state sigil.UnprettifyState
 ---@return boolean
 local function state_is_valid(buf, tracked_state)
+	if #tracked_state.symbols == 0 then
+		return false
+	end
 	for _, sym in ipairs(tracked_state.symbols) do
 		local ok, marks = pcall(vim.api.nvim_buf_get_extmarks, buf, state.ns, sym.id, sym.id, {})
-		if ok and #marks > 0 then
-			return true
+		if not ok or #marks == 0 then
+			return false
 		end
 	end
-	return false
+	return true
 end
 
 ---Update for "symbol" mode (unprettify single symbol under cursor)
@@ -177,8 +180,8 @@ local function update_line_mode(buf, row)
 			if state_is_valid(buf, current) then
 				return -- still on the same line, nothing to do
 			end
-			-- State is stale, clear and re-scan
-			M._state[buf] = nil
+			-- State is stale (extmarks recreated), restore surviving ones then re-scan
+			restore_symbols(buf)
 		else
 			-- Different line, restore old line
 			restore_symbols(buf)
