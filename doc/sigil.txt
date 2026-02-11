@@ -71,7 +71,7 @@ concept to Neovim with several additions:
 With lazy.nvim: >lua
 
   {
-    "Prgebish/sigil",
+    "Prgebish/sigil.nvim",
     config = function()
       require("sigil").setup({
         filetypes = { "tex", "plaintex", "latex", "typst" },

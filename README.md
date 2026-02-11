@@ -14,21 +14,21 @@ Based on the idea of Emacs [`prettify-symbols-mode`](https://www.gnu.org/softwar
 Symbols stay prettified at all times. Navigation and editing work as if
 each symbol were a single character.
 
-![Atomic motions demo](demo/default_mode.gif)
+![Atomic motions demo](https://github.com/Prgebish/sigil.nvim/releases/download/v0.1.0/default_mode.gif)
 
 ### Unprettify at point (`unprettify_at_point = true`)
 
 The symbol under the cursor reverts to original text. Other symbols on
 the line remain prettified.
 
-![Unprettify at point demo](demo/unprett_1.gif)
+![Unprettify at point demo](https://github.com/Prgebish/sigil.nvim/releases/download/v0.1.0/unprett_1.gif)
 
 ### Unprettify line (`unprettify_at_point = "line"`)
 
 All symbols on the cursor line revert to original text. When the cursor
 moves to another line, the previous line is re-prettified.
 
-![Unprettify line demo](demo/unprett_2.gif)
+![Unprettify line demo](https://github.com/Prgebish/sigil.nvim/releases/download/v0.1.0/unprett_2.gif)
 
 ## Features
 
@@ -53,7 +53,7 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
 {
-  "chestnykh/sigil",
+  "Prgebish/sigil.nvim",
   config = function()
     require("sigil").setup({
       filetypes = { "tex", "plaintex", "latex", "typst" },
