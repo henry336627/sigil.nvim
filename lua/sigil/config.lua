@@ -22,7 +22,7 @@ local M = {}
 ---@field atomic_motions? boolean Treat prettified symbols as single chars for h/l (default: true)
 ---@field filetype_symbol_contexts? table<string, { math_only?: string[], text_only?: string[] }> Context-specific symbols
 ---@field filetype_context_predicates? table<string, fun(ctx: sigil.MatchContext): boolean> Per-filetype context predicate (e.g. math)
----@field unprettify_at_point? boolean|"right-edge" Show original text when cursor is on prettified symbol
+---@field unprettify_at_point? boolean|"line" Show original text when cursor is on prettified symbol (true) or on entire cursor line ("line")
 ---@field lazy_prettify_threshold? integer Line count threshold for lazy prettify (default: 500, 0 to disable)
 ---@field lazy_prettify_buffer? integer Extra lines to prettify around visible area (default: 50)
 ---@field lazy_prettify_debounce_ms? integer Debounce delay for scroll-triggered prettify (default: 50)
@@ -45,7 +45,7 @@ M.default = {
 	atomic_motions = true, -- treat prettified symbols as single chars for h/l
 	filetype_symbol_contexts = {}, -- per-filetype context-specific symbol lists
 	filetype_context_predicates = {}, -- per-filetype context predicate (e.g. math)
-	unprettify_at_point = nil, -- nil/false: disabled, true: show when cursor on symbol, "right-edge": show when cursor past start
+	unprettify_at_point = nil, -- nil/false: disabled, true: show when cursor on symbol, "line": show all symbols on cursor line
 	-- Lazy prettify options (for large files)
 	lazy_prettify_threshold = 500, -- enable lazy loading for files > N lines (0 to disable)
 	lazy_prettify_buffer = 50, -- extra lines to prettify around visible area

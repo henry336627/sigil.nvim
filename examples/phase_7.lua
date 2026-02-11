@@ -27,24 +27,25 @@ local lambda_test = "lambda" --> shows original "lambda" when cursor is on it
 --   Show original text when cursor is anywhere on the symbol.
 --   Atomic motions are DISABLED: normal Vim navigation/editing.
 --
--- unprettify_at_point = "right-edge"
---   Show original text only when cursor moves past the first character.
+-- unprettify_at_point = "line"
+--   Show original text for ALL prettified symbols on the cursor line.
+--   When cursor moves to a different line, symbols are restored.
 --   Atomic motions are DISABLED: normal Vim navigation/editing.
---   (Emacs-like behavior)
+--   (VimTeX-style behavior)
 
--- Example config with right-edge mode:
+-- Example config with line mode:
 -- require("sigil").setup({
 --     filetypes = { "lua" },
 --     symbols = {
 --         ["->"] = "→",
 --         ["lambda"] = "λ",
 --     },
---     unprettify_at_point = "right-edge",
+--     unprettify_at_point = "line",
 -- })
 
--- Test with right-edge mode:
--- When cursor is on first char of "lambda" (l), it stays prettified (λ)
--- When cursor moves to second char (a), original "lambda" appears
+-- Test with line mode:
+-- When cursor is anywhere on a line, ALL symbols on that line become unprettified
+-- When cursor moves to another line, the previous line's symbols are restored
 
 -- More test patterns:
 local test_arrow = "-> value"    --> arrow at start

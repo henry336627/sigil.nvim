@@ -53,6 +53,12 @@ Create a Neovim plugin that visually replaces text patterns with Unicode symbols
   - [x] 7.3 Add `unprettify_at_point` config option (nil, true, 'right-edge')
   - [x] 7.4 Write tests for unprettify behavior
 
+- [x] Phase 9: Line-level unprettify mode
+  - [x] 9.1 Replace `"right-edge"` with `"line"` option value
+  - [x] 9.2 Unprettify all symbols on cursor line, restore when leaving
+  - [x] 9.3 Write tests for `"line"` mode
+  - [x] 9.4 Update examples
+
 - [x] Phase 8: Performance Optimization
   - [x] 8.1 Use `nvim_buf_attach` for incremental updates (only changed lines)
   - [x] 8.2 Add debounce for incremental updates (avoid excessive updates while typing)
@@ -76,7 +82,7 @@ Create a Neovim plugin that visually replaces text patterns with Unicode symbols
 - Single-char replacements only (Emacs parity: compose-region → one glyph; multi-char breaks motions/cursor positioning)
 
 ## Status
-**Phase 8 COMPLETE** — Lazy prettification for large files (visible range only), benchmark module (:SigilBenchmark), and performance tests implemented
+**Phase 9 COMPLETE** — Line-level unprettify mode: `"line"` option replaces `"right-edge"`, all symbols on cursor line become unprettified (VimTeX-style)
 
 ## Files
 - `task_plan.md` — this file
