@@ -62,7 +62,7 @@ Create a Neovim plugin that visually replaces text patterns with Unicode symbols
   - [x] 8.6 Write performance tests
 
 ## Blocked / Open Questions
-- [ ] Multi-character replacement display (compose vs single char)?
+(none)
 
 ## Decisions Made
 - Use extmarks with `conceal` option for symbol replacement (standard Neovim approach)
@@ -73,6 +73,7 @@ Create a Neovim plugin that visually replaces text patterns with Unicode symbols
 - Unprettify-at-point is optional (default: symbols stay prettified under cursor)
 - Symbols stay concealed in all modes (concealcursor = "nvic")
 - Atomic symbol motions: prettified symbols behave as single characters for navigation/editing
+- Single-char replacements only (Emacs parity: compose-region → one glyph; multi-char breaks motions/cursor positioning)
 
 ## Status
 **Phase 8 COMPLETE** — Lazy prettification for large files (visible range only), benchmark module (:SigilBenchmark), and performance tests implemented
