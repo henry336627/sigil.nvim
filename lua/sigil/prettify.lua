@@ -109,6 +109,7 @@ function M.find_matches(line, symbols)
 						end_col = match_end,
 						pattern = pattern,
 						replacement = replacement,
+						hl_group = sym.hl_group,
 					})
 				end
 			end
@@ -151,7 +152,8 @@ function M.prettify_line(buf, row, line, symbols, pred)
 		end
 
 		if should_prettify then
-			extmark.create(buf, row, match.col, match.end_col, match.replacement)
+			local hl = match.hl_group or config.current.hl_group
+			extmark.create(buf, row, match.col, match.end_col, match.replacement, hl)
 		end
 	end
 end

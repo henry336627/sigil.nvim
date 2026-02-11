@@ -26,6 +26,7 @@ local M = {}
 ---@field lazy_prettify_threshold? integer Line count threshold for lazy prettify (default: 500, 0 to disable)
 ---@field lazy_prettify_buffer? integer Extra lines to prettify around visible area (default: 50)
 ---@field lazy_prettify_debounce_ms? integer Debounce delay for scroll-triggered prettify (default: 50)
+---@field hl_group? string Default highlight group for prettified symbols (nil = no highlight)
 
 ---Default configuration
 ---@type sigil.Config
@@ -96,6 +97,13 @@ local function normalize_symbols(symbols)
 	return result
 end
 
+---Check if symbols table uses structured format (math/text/any subtables)
+---@param symbols table
+---@return boolean
+local function is_structured_format(symbols)
+	return type(symbols) == "table" and (symbols.math ~= nil or symbols.text ~= nil or symbols.any ~= nil)
+end
+
 ---Get symbols for a specific filetype (returns map format for backward compat)
 ---@param ft string
 ---@return table<string, string>
@@ -115,9 +123,20 @@ function M.get_symbols(ft)
 	-- Merge filetype-specific symbols
 	local ft_symbols = M.current.filetype_symbols[ft]
 	if ft_symbols then
-		local ft_normalized = normalize_symbols(ft_symbols)
-		for _, sym in ipairs(ft_normalized) do
-			symbols[sym.pattern] = sym.replacement
+		if is_structured_format(ft_symbols) then
+			for _, key in ipairs({ "math", "text", "any" }) do
+				if ft_symbols[key] then
+					local normalized = normalize_symbols(ft_symbols[key])
+					for _, sym in ipairs(normalized) do
+						symbols[sym.pattern] = sym.replacement
+					end
+				end
+			end
+		else
+			local ft_normalized = normalize_symbols(ft_symbols)
+			for _, sym in ipairs(ft_normalized) do
+				symbols[sym.pattern] = sym.replacement
+			end
 		end
 	end
 
@@ -144,19 +163,41 @@ function M.get_sorted_symbols(ft)
 	-- Merge filetype-specific symbols (override by pattern)
 	local ft_symbols = M.current.filetype_symbols[ft]
 	if ft_symbols then
-		local ft_normalized = normalize_symbols(ft_symbols)
 		-- Build a map of existing patterns for quick lookup
 		local pattern_idx = {}
 		for i, sym in ipairs(sorted) do
 			pattern_idx[sym.pattern] = i
 		end
-		-- Add or replace filetype symbols
-		for _, sym in ipairs(ft_normalized) do
-			local idx = pattern_idx[sym.pattern]
-			if idx then
-				sorted[idx] = vim.deepcopy(sym)
-			else
-				table.insert(sorted, vim.deepcopy(sym))
+
+		if is_structured_format(ft_symbols) then
+			-- Structured format: normalize each subtable, tag with _context
+			local context_keys = { math = "math", text = "text" }
+			for _, key in ipairs({ "math", "text", "any" }) do
+				if ft_symbols[key] then
+					local normalized = normalize_symbols(ft_symbols[key])
+					for _, sym in ipairs(normalized) do
+						local copy = vim.deepcopy(sym)
+						copy._context = context_keys[key] -- nil for "any"
+						local idx = pattern_idx[copy.pattern]
+						if idx then
+							sorted[idx] = copy
+						else
+							table.insert(sorted, copy)
+							pattern_idx[copy.pattern] = #sorted
+						end
+					end
+				end
+			end
+		else
+			-- Flat format (list or map)
+			local ft_normalized = normalize_symbols(ft_symbols)
+			for _, sym in ipairs(ft_normalized) do
+				local idx = pattern_idx[sym.pattern]
+				if idx then
+					sorted[idx] = vim.deepcopy(sym)
+				else
+					table.insert(sorted, vim.deepcopy(sym))
+				end
 			end
 		end
 	end
@@ -218,28 +259,35 @@ function M.get_predicate(ft)
 		})
 	end
 
-	local context_spec = M.current.filetype_symbol_contexts and M.current.filetype_symbol_contexts[ft]
-	if not context_spec then
-		M._cache.predicates[ft] = base_pred
-		return base_pred
-	end
-
-	local math_list = context_spec.math_only or context_spec.math or {}
-	local text_list = context_spec.text_only or context_spec.text or {}
-
-	if #math_list == 0 and #text_list == 0 then
-		M._cache.predicates[ft] = base_pred
-		return base_pred
-	end
-
+	-- Build math/text sets from _context tags on sorted symbols
 	local math_set = {}
-	for _, key in ipairs(math_list) do
-		math_set[key] = true
+	local text_set = {}
+
+	local sorted_symbols = M.get_sorted_symbols(ft)
+	for _, sym in ipairs(sorted_symbols) do
+		if sym._context == "math" then
+			math_set[sym.pattern] = true
+		elseif sym._context == "text" then
+			text_set[sym.pattern] = true
+		end
 	end
 
-	local text_set = {}
-	for _, key in ipairs(text_list) do
-		text_set[key] = true
+	-- Merge with filetype_symbol_contexts (backward compat)
+	local context_spec = M.current.filetype_symbol_contexts and M.current.filetype_symbol_contexts[ft]
+	if context_spec then
+		local math_list = context_spec.math_only or context_spec.math or {}
+		local text_list = context_spec.text_only or context_spec.text or {}
+		for _, key in ipairs(math_list) do
+			math_set[key] = true
+		end
+		for _, key in ipairs(text_list) do
+			text_set[key] = true
+		end
+	end
+
+	if not next(math_set) and not next(text_set) then
+		M._cache.predicates[ft] = base_pred
+		return base_pred
 	end
 
 	local context_pred = nil

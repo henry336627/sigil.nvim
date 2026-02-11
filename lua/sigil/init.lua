@@ -16,6 +16,9 @@ function M.setup(opts)
 	local config = require("sigil.config")
 	config.setup(opts)
 
+	-- Define default highlight group (linked to Special, users can override)
+	vim.api.nvim_set_hl(0, "SigilSymbol", { default = true, link = "Special" })
+
 	M._initialized = true
 
 	-- Initialize manager (autocmds, attach to buffers)

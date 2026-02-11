@@ -320,3 +320,242 @@ describe("sigil.config contexts", function()
 		assert.is_true(pred(text_ctx))
 	end)
 end)
+
+describe("sigil.config structured symbol subtables", function()
+	local config
+
+	before_each(function()
+		package.loaded["sigil.config"] = nil
+		config = require("sigil.config")
+	end)
+
+	it("should detect structured format and tag symbols with _context", function()
+		config.setup({
+			filetype_symbols = {
+				typst = {
+					math = {
+						{ pattern = "alpha", replacement = "α", boundary = "left" },
+						{ pattern = "sum", replacement = "∑", boundary = "left" },
+					},
+					text = {
+						{ pattern = "emph", replacement = "𝑒", boundary = "left" },
+					},
+					any = {
+						{ pattern = "->", replacement = "→" },
+					},
+				},
+			},
+		})
+
+		local sorted = config.get_sorted_symbols("typst")
+		-- All 4 symbols should be present
+		assert.equals(4, #sorted)
+
+		-- Build a lookup by pattern
+		local by_pattern = {}
+		for _, sym in ipairs(sorted) do
+			by_pattern[sym.pattern] = sym
+		end
+
+		assert.equals("math", by_pattern["alpha"]._context)
+		assert.equals("math", by_pattern["sum"]._context)
+		assert.equals("text", by_pattern["emph"]._context)
+		assert.is_nil(by_pattern["->"]._context)
+	end)
+
+	it("should filter math symbols based on context predicate", function()
+		config.setup({
+			predicate = function()
+				return true
+			end,
+			filetype_symbols = {
+				typst = {
+					math = {
+						{ pattern = "alpha", replacement = "α", boundary = "left" },
+					},
+					any = {
+						{ pattern = "->", replacement = "→" },
+					},
+				},
+			},
+			filetype_context_predicates = {
+				-- col == 0 means "in math context"
+				typst = function(ctx)
+					return ctx.col == 0
+				end,
+			},
+		})
+
+		local pred = config.get_predicate("typst")
+
+		-- math symbol in math context (col=0) -> allowed
+		assert.is_true(pred({
+			buf = 0, row = 0, col = 0, end_col = 5,
+			pattern = "alpha", replacement = "α",
+		}))
+
+		-- math symbol outside math context (col=1) -> blocked
+		assert.is_false(pred({
+			buf = 0, row = 0, col = 1, end_col = 6,
+			pattern = "alpha", replacement = "α",
+		}))
+
+		-- any symbol in math context -> allowed
+		assert.is_true(pred({
+			buf = 0, row = 0, col = 0, end_col = 2,
+			pattern = "->", replacement = "→",
+		}))
+
+		-- any symbol outside math context -> also allowed
+		assert.is_true(pred({
+			buf = 0, row = 0, col = 5, end_col = 7,
+			pattern = "->", replacement = "→",
+		}))
+	end)
+
+	it("should filter text symbols based on context predicate", function()
+		config.setup({
+			predicate = function()
+				return true
+			end,
+			filetype_symbols = {
+				typst = {
+					text = {
+						{ pattern = "emph", replacement = "𝑒", boundary = "left" },
+					},
+					any = {
+						{ pattern = "->", replacement = "→" },
+					},
+				},
+			},
+			filetype_context_predicates = {
+				typst = function(ctx)
+					return ctx.col == 0
+				end,
+			},
+		})
+
+		local pred = config.get_predicate("typst")
+
+		-- text symbol in math context (col=0) -> blocked
+		assert.is_false(pred({
+			buf = 0, row = 0, col = 0, end_col = 4,
+			pattern = "emph", replacement = "𝑒",
+		}))
+
+		-- text symbol outside math context (col=1) -> allowed
+		assert.is_true(pred({
+			buf = 0, row = 0, col = 1, end_col = 5,
+			pattern = "emph", replacement = "𝑒",
+		}))
+	end)
+
+	it("should merge structured subtables with filetype_symbol_contexts", function()
+		config.setup({
+			predicate = function()
+				return true
+			end,
+			filetype_symbols = {
+				typst = {
+					math = {
+						{ pattern = "alpha", replacement = "α", boundary = "left" },
+					},
+					any = {
+						{ pattern = "->", replacement = "→" },
+						{ pattern = "beta", replacement = "β", boundary = "left" },
+					},
+				},
+			},
+			-- Legacy: also mark "beta" as math_only via filetype_symbol_contexts
+			filetype_symbol_contexts = {
+				typst = {
+					math_only = { "beta" },
+				},
+			},
+			filetype_context_predicates = {
+				typst = function(ctx)
+					return ctx.col == 0
+				end,
+			},
+		})
+
+		local pred = config.get_predicate("typst")
+
+		-- "alpha" from structured math subtable: blocked outside math
+		assert.is_false(pred({
+			buf = 0, row = 0, col = 5, end_col = 10,
+			pattern = "alpha", replacement = "α",
+		}))
+
+		-- "beta" from any subtable but overridden by filetype_symbol_contexts math_only:
+		-- blocked outside math
+		assert.is_false(pred({
+			buf = 0, row = 0, col = 5, end_col = 9,
+			pattern = "beta", replacement = "β",
+		}))
+
+		-- "beta" in math context -> allowed
+		assert.is_true(pred({
+			buf = 0, row = 0, col = 0, end_col = 4,
+			pattern = "beta", replacement = "β",
+		}))
+	end)
+
+	it("should still work with flat format (backward compat)", function()
+		config.setup({
+			filetype_symbols = {
+				lua = {
+					{ pattern = "lambda", replacement = "λ" },
+					{ pattern = "->", replacement = "→" },
+				},
+			},
+		})
+
+		local sorted = config.get_sorted_symbols("lua")
+		assert.equals(2, #sorted)
+
+		-- No _context tags on flat format symbols
+		for _, sym in ipairs(sorted) do
+			assert.is_nil(sym._context)
+		end
+	end)
+
+	it("should preserve boundary and other fields in structured format", function()
+		config.setup({
+			filetype_symbols = {
+				typst = {
+					math = {
+						{ pattern = "alpha", replacement = "α", boundary = "left", hl_group = "Special" },
+					},
+				},
+			},
+		})
+
+		local sorted = config.get_sorted_symbols("typst")
+		assert.equals(1, #sorted)
+		assert.equals("alpha", sorted[1].pattern)
+		assert.equals("α", sorted[1].replacement)
+		assert.equals("left", sorted[1].boundary)
+		assert.equals("Special", sorted[1].hl_group)
+		assert.equals("math", sorted[1]._context)
+	end)
+
+	it("should work with get_symbols for structured format", function()
+		config.setup({
+			filetype_symbols = {
+				typst = {
+					math = {
+						{ pattern = "alpha", replacement = "α" },
+					},
+					any = {
+						{ pattern = "->", replacement = "→" },
+					},
+				},
+			},
+		})
+
+		local symbols = config.get_symbols("typst")
+		assert.equals("α", symbols["alpha"])
+		assert.equals("→", symbols["->"])
+	end)
+end)

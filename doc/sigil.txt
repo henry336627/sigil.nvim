@@ -1,0 +1,958 @@
+*sigil.txt*                        Prettify symbols for Neovim
+
+Author: chestnykh
+License: MIT
+
+==============================================================================
+CONTENTS                                                      *sigil-contents*
+
+  1. Overview ....................................... |sigil-overview|
+  2. Requirements ................................... |sigil-requirements|
+  3. Installation ................................... |sigil-installation|
+  4. Quick start .................................... |sigil-quickstart|
+  5. Configuration .................................. |sigil-config|
+     5.1 General options ........................... |sigil-config-general|
+     5.2 Symbol definitions ........................ |sigil-config-symbols|
+     5.3 Predicates ................................ |sigil-config-predicates|
+     5.4 Unprettify at point ....................... |sigil-config-unprettify|
+     5.5 Performance tuning ........................ |sigil-config-performance|
+     5.6 Highlight ................................. |sigil-config-highlight|
+  6. Commands ....................................... |sigil-commands|
+  7. Lua API ........................................ |sigil-api|
+  8. How symbols work ............................... |sigil-symbols|
+     8.1 Pattern matching .......................... |sigil-matching|
+     8.2 Word boundaries ........................... |sigil-boundaries|
+     8.3 Per-filetype symbols ...................... |sigil-filetype-symbols|
+  9. Context awareness .............................. |sigil-context|
+     9.1 Strings and comments ...................... |sigil-skip-strings|
+     9.2 Custom predicates ......................... |sigil-custom-predicates|
+     9.3 Math context .............................. |sigil-math-context|
+ 10. Atomic motions ................................. |sigil-motions|
+     10.1 Normal mode .............................. |sigil-motions-normal|
+     10.2 Insert mode .............................. |sigil-motions-insert|
+     10.3 Visual mode .............................. |sigil-motions-visual|
+ 11. Unprettify at point ............................ |sigil-unprettify|
+ 12. Performance .................................... |sigil-performance|
+ 13. Highlight groups ............................... |sigil-highlights|
+ 14. Tips and recipes ............................... |sigil-recipes|
+
+==============================================================================
+1. OVERVIEW                                                   *sigil-overview*
+
+sigil is a Neovim plugin that visually replaces text patterns with Unicode
+symbols while you edit. The actual file content is never modified -- sigil
+only changes how text is displayed on screen.
+
+For example, `\alpha` can be shown as `α`, `\to` as `→`, `\leq` as `≤`.
+In Typst, `alpha` becomes `α`, `->` becomes `→`, and so on.
+
+The idea comes from Emacs `prettify-symbols-mode`. sigil brings the same
+concept to Neovim with several additions:
+
+  - Context awareness: skip replacement inside strings and comments.
+  - Atomic motions: navigate and edit prettified symbols as if they were
+    single characters.
+  - Unprettify at point: reveal the original text when the cursor touches
+    a symbol (or when the cursor is on the same line).
+  - Math context: restrict certain symbols to math regions in LaTeX/Typst.
+  - Lazy prettification: handle large files by prettifying only the visible
+    area.
+
+==============================================================================
+2. REQUIREMENTS                                           *sigil-requirements*
+
+  - Neovim >= 0.9.0
+  - A font with Unicode symbol support (Nerd Font or similar)
+  - Tree-sitter parsers (optional, for context-aware filtering)
+
+==============================================================================
+3. INSTALLATION                                           *sigil-installation*
+
+With lazy.nvim: >lua
+
+  {
+    "Prgebish/sigil",
+    config = function()
+      require("sigil").setup({
+        filetypes = { "tex", "plaintex", "latex", "typst" },
+        filetype_symbols = {
+          tex = {
+            { pattern = "\\alpha", replacement = "α", boundary = "left" },
+            { pattern = "\\beta",  replacement = "β", boundary = "left" },
+            { pattern = "\\to",    replacement = "→" },
+            { pattern = "\\leq",   replacement = "≤" },
+            { pattern = "\\geq",   replacement = "≥" },
+            { pattern = "\\neq",   replacement = "≠" },
+          },
+        },
+        unprettify_at_point = "line",
+      })
+    end,
+  }
+<
+With any other plugin manager, make sure `require("sigil").setup({...})` is
+called after the plugin is loaded.
+
+==============================================================================
+4. QUICK START                                             *sigil-quickstart*
+
+Minimal LaTeX setup: >lua
+
+  require("sigil").setup({
+    filetypes = { "tex", "plaintex", "latex" },
+    filetype_symbols = {
+      tex = {
+        { pattern = "\\alpha", replacement = "α", boundary = "left" },
+        { pattern = "\\to",    replacement = "→" },
+        { pattern = "\\infty", replacement = "∞" },
+      },
+    },
+  })
+<
+Open a `.tex` file, and every `\alpha` will display as `α`, `\to` as `→`,
+`\infty` as `∞`. The file on disk stays unchanged.
+
+If you do not see replacements, check that 'conceallevel' is 2. sigil sets
+this automatically for attached buffers, but some other plugin or ftplugin
+may override it.
+
+==============================================================================
+5. CONFIGURATION                                             *sigil-config*
+
+Pass a configuration table to `require("sigil").setup()`. Every option has
+a sensible default; you only need to specify what you want to change.
+
+Full default configuration: >lua
+
+  require("sigil").setup({
+    enabled = true,
+    symbols = {},
+    filetype_symbols = {},
+    filetypes = {},
+    excluded_filetypes = {},
+    conceal_cursor = "nvic",
+    update_debounce_ms = 30,
+    predicate = nil,
+    filetype_predicates = {},
+    skip_strings = true,
+    skip_comments = true,
+    atomic_motions = true,
+    unprettify_at_point = nil,
+    filetype_symbol_contexts = {},
+    filetype_context_predicates = {},
+    lazy_prettify_threshold = 500,
+    lazy_prettify_buffer = 50,
+    lazy_prettify_debounce_ms = 50,
+    hl_group = nil,
+  })
+<
+------------------------------------------------------------------------------
+5.1 General options                                    *sigil-config-general*
+
+                                                       *sigil-config-enabled*
+`enabled`         boolean (default: `true`)
+  Master switch. When `false`, the plugin does nothing at startup. You can
+  still enable it later per-buffer with |:SigilEnable|.
+
+                                                     *sigil-config-filetypes*
+`filetypes`       string[] | `"*"` (default: `{}`)
+  List of filetypes to attach to. Use `"*"` to enable for all filetypes. An
+  empty table `{}` means no filetypes are enabled automatically -- you would
+  need to call |:SigilEnable| manually.
+
+  Example: >lua
+    filetypes = { "tex", "plaintex", "latex", "typst" }
+<
+                                                  *sigil-config-excluded-ft*
+`excluded_filetypes`  string[] (default: `{}`)
+  Filetypes to never attach to, even when `filetypes` is `"*"`.
+
+  Example: >lua
+    filetypes = "*",
+    excluded_filetypes = { "help", "man", "qf" },
+<
+                                                *sigil-config-conceal-cursor*
+`conceal_cursor`  string (default: `"nvic"`)
+  Vim modes in which the cursor line stays concealed. This is passed to
+  'concealcursor' for every window showing an attached buffer. The default
+  `"nvic"` means symbols stay prettified in normal, visual, insert, and
+  command-line mode. See |'concealcursor'| for possible values.
+
+  If you want the cursor line to always show original text (like vanilla
+  Vim conceal behavior), set this to `""`.
+
+------------------------------------------------------------------------------
+5.2 Symbol definitions                                *sigil-config-symbols*
+
+                                              *sigil-config-symbols-opt*
+                                              *sigil-list-format*
+`symbols`         table (default: `{}`)
+  Global symbol mappings applied to all filetypes. Can be specified in two
+  formats.
+
+  Map format -- simple, just pattern → replacement: >lua
+    symbols = {
+      ["\\to"]  = "→",
+      ["\\leq"] = "≤",
+    }
+<
+  List format -- allows extra options per symbol: >lua
+    symbols = {
+      { pattern = "\\to",    replacement = "→" },
+      { pattern = "\\alpha", replacement = "α", boundary = "left" },
+      { pattern = "\\sum",   replacement = "∑", hl_group = "Special" },
+    }
+<
+  List format fields:
+
+    `pattern`       (string, required)  The text to match.
+    `replacement`   (string, required)  The Unicode character to display.
+    `boundary`      (string, optional)  Word boundary mode (see
+                      |sigil-boundaries|):
+                      `"both"`  (default) Check left and right boundaries.
+                      `"left"`  Check only the left boundary. This is the
+                                most common override for LaTeX/Typst: it
+                                allows subscripts and superscripts on the
+                                right (e.g. `\sum_{i=0}`, `alpha_1`) while
+                                still preventing partial matches on the
+                                left.
+                      `"right"` Check only the right boundary.
+                      `"none"`  No boundary checks at all.
+    `hl_group`      (string, optional)  Highlight group for this symbol,
+                      overrides the global `hl_group`.
+
+  Both formats can be used in `symbols` and `filetype_symbols`. They can
+  also be mixed: global `symbols` in map format, filetype in list format.
+
+                                               *sigil-config-filetype-symbols*
+`filetype_symbols`  table<string, table> (default: `{}`)
+  Per-filetype symbol overrides. Keys are filetype names, values are symbol
+  tables (either format). Filetype symbols are merged on top of global
+  symbols; if the same pattern appears in both, the filetype version wins.
+
+  Flat example (all symbols treated equally): >lua
+    filetype_symbols = {
+      tex = {
+        { pattern = "\\alpha", replacement = "α", boundary = "left" },
+        { pattern = "\\sum",   replacement = "∑", boundary = "left" },
+        { pattern = "\\to",    replacement = "→" },
+      },
+    }
+<
+                                           *sigil-config-structured-symbols*
+  Structured example -- organize symbols by context (`math`, `text`, `any`).
+  This is the recommended approach for languages with math context (Typst,
+  LaTeX). It replaces the need for `filetype_symbol_contexts`: >lua
+    filetype_symbols = {
+      typst = {
+        math = {
+          -- Only prettified inside math regions ($...$)
+          { pattern = "alpha", replacement = "α", boundary = "left" },
+          { pattern = "sum",   replacement = "∑", boundary = "left" },
+        },
+        text = {
+          -- Only prettified outside math regions
+        },
+        any = {
+          -- Prettified everywhere
+          { pattern = "->",  replacement = "→" },
+        },
+      },
+    }
+<
+  Subtable keys:
+    `math`  Symbols only prettified inside math context.
+    `text`  Symbols only prettified outside math context.
+    `any`   Symbols prettified everywhere (no context restriction).
+
+  Both flat and structured formats can coexist across filetypes in the same
+  config. The format is auto-detected per filetype.
+<
+------------------------------------------------------------------------------
+5.3 Predicates                                      *sigil-config-predicates*
+
+                                                  *sigil-config-skip-strings*
+`skip_strings`    boolean (default: `true`)
+  When `true`, patterns found inside string literals are not replaced.
+  Uses Tree-sitter when available, falls back to Vim syntax groups.
+
+                                                 *sigil-config-skip-comments*
+`skip_comments`   boolean (default: `true`)
+  When `true`, patterns found inside comments are not replaced.
+
+                                                     *sigil-config-predicate*
+`predicate`       function|nil (default: `nil`)
+  Advanced escape hatch. Most users do not need this -- `skip_strings`,
+  `skip_comments`, and `filetype_symbol_contexts` cover the common cases.
+
+  A custom predicate completely replaces the default filtering logic. The
+  function receives a context table and must return `true` to prettify or
+  `false` to skip. When set, `skip_strings` / `skip_comments` are ignored.
+
+  Context table fields: >lua
+    {
+      buf = 1,              -- buffer number
+      row = 5,              -- 0-indexed row
+      col = 10,             -- 0-indexed start column
+      end_col = 16,         -- 0-indexed end column
+      pattern = "\\alpha",  -- original text
+      replacement = "α",    -- replacement symbol
+    }
+<
+  When this might be useful:
+    - Skipping `\verbatim` or `\lstlisting` blocks that Tree-sitter does
+      not classify as strings.
+    - Restricting prettification to specific LaTeX environments (e.g. only
+      in `equation`, not in `tikzpicture`).
+    - Filtering by pattern properties (e.g. skip short patterns).
+
+                                            *sigil-config-filetype-predicates*
+`filetype_predicates`  table<string, function> (default: `{}`)
+  Same as `predicate`, but per-filetype. A filetype predicate overrides the
+  global one for that filetype. Same "rarely needed" caveat applies.
+
+------------------------------------------------------------------------------
+5.4 Unprettify at point                            *sigil-config-unprettify*
+
+                                            *sigil-config-unprettify-at-point*
+`unprettify_at_point`  nil | boolean | `"line"` (default: `nil`)
+  Controls whether original text is revealed near the cursor.
+
+  `nil` or `false`  Symbols stay prettified at all times. Atomic motions
+                    are active (see |sigil-motions|).
+
+  `true`            When the cursor lands on a prettified symbol, that single
+                    symbol reverts to original text. When the cursor moves
+                    away, the symbol is prettified again. Atomic motions are
+                    disabled because the cursor already sees original text.
+
+  `"line"`          All symbols on the cursor line revert to original text.
+                    When the cursor moves to another line, the previous line
+                    is re-prettified. Similar to VimTeX conceal behavior.
+                    Atomic motions are disabled.
+
+------------------------------------------------------------------------------
+5.5 Performance tuning                            *sigil-config-performance*
+
+                                                 *sigil-config-debounce*
+`update_debounce_ms`  integer (default: `30`)
+  Delay in milliseconds before re-prettifying after a text change. Multiple
+  rapid changes (e.g. typing) are batched into a single update. Set to `0`
+  for instant updates. Higher values reduce CPU usage at the cost of a brief
+  visual lag.
+
+                                            *sigil-config-lazy-threshold*
+`lazy_prettify_threshold`  integer (default: `500`)
+  When a buffer has more lines than this, sigil switches to lazy mode:
+  instead of prettifying the entire file at once, it only processes lines
+  near the visible window. For example, if you see lines 100-150 and
+  `lazy_prettify_buffer` is 50, sigil prettifies lines 50-200. As you
+  scroll, new regions are prettified on demand.
+
+  Set to `0` to disable lazy mode (prettify everything immediately,
+  regardless of file size).
+
+                                              *sigil-config-lazy-buffer*
+`lazy_prettify_buffer`  integer (default: `50`)
+  How many extra lines to prettify above and below the visible window in
+  lazy mode. This margin ensures that symbols are already ready when you
+  scroll a little, so there is no visible flash. A larger value means
+  smoother scrolling but more work up front.
+
+                                           *sigil-config-lazy-debounce*
+`lazy_prettify_debounce_ms`  integer (default: `50`)
+  Debounce delay for scroll-triggered prettification in lazy mode.
+
+------------------------------------------------------------------------------
+5.6 Highlight                                       *sigil-config-highlight*
+
+                                                    *sigil-config-hl-group*
+`hl_group`        string|nil (default: `nil`)
+  Default highlight group for all prettified symbols. When `nil`, symbols
+  are displayed without extra highlighting (they inherit the conceal
+  highlight of the surrounding text).
+
+  Example: >lua
+    hl_group = "Special",
+<
+  Individual symbols can override this with their own `hl_group` field (see
+  |sigil-list-format|).
+
+==============================================================================
+6. COMMANDS                                                   *sigil-commands*
+
+                                                                      *:Sigil*
+:Sigil              Toggle sigil on/off for the current buffer.
+
+                                                                *:SigilEnable*
+:SigilEnable        Enable sigil for the current buffer.
+
+                                                               *:SigilDisable*
+:SigilDisable       Disable sigil for the current buffer. Clears all
+                    prettified symbols.
+
+                                                            *:SigilBenchmark*
+:SigilBenchmark     Run the built-in performance benchmark. Prints a table
+                    showing attach time and extmark count for various file
+                    sizes (100 to 20,000 lines).
+
+==============================================================================
+7. LUA API                                                        *sigil-api*
+
+All functions are available through `require("sigil")`.
+
+                                                             *sigil.setup()*
+sigil.setup({opts})
+  Initialize the plugin with user configuration. Must be called once before
+  any other function. Calling `setup()` again with new options reconfigures
+  the plugin.
+
+                                                            *sigil.enable()*
+sigil.enable({buf?})
+  Enable prettification for buffer {buf} (default: current buffer). If the
+  buffer was previously disabled, re-prettifies it.
+
+                                                           *sigil.disable()*
+sigil.disable({buf?})
+  Disable prettification for buffer {buf}. Clears all extmarks.
+
+                                                            *sigil.toggle()*
+sigil.toggle({buf?})
+  Toggle prettification for buffer {buf}.
+
+                                                           *sigil.refresh()*
+sigil.refresh({buf?})
+  Force a full re-prettification of buffer {buf}. Useful after changing
+  configuration or if extmarks get out of sync.
+
+                                                        *sigil.get_config()*
+sigil.get_config()
+  Returns the current configuration table (read-only).
+
+==============================================================================
+8. HOW SYMBOLS WORK                                           *sigil-symbols*
+
+------------------------------------------------------------------------------
+8.1 Pattern matching                                        *sigil-matching*
+
+sigil uses plain string matching (not regular expressions). Every occurrence
+of a pattern in the buffer text is a candidate for replacement. Patterns are
+checked longest-first, so `<=` is matched before `<`, and `\subseteq` before
+`\sub`.
+
+When two patterns overlap in the same line, the longer one wins. Positions
+already covered by a longer match are not considered for shorter ones.
+
+Each replacement must be a single Unicode character (one glyph). This is a
+design constraint inherited from Emacs: conceal replaces an arbitrary span
+of text with exactly one display cell.
+
+------------------------------------------------------------------------------
+8.2 Word boundaries                                       *sigil-boundaries*
+
+When a pattern starts or ends with a letter (a-z, A-Z), sigil automatically
+checks word boundaries to avoid partial matches. For example, in Typst the
+pattern `in` (`∈`) will not match inside the word `integral`.
+
+The boundary check works as follows:
+  - Left boundary: if the pattern starts with a letter, the character before
+    the match must not be alphanumeric.
+  - Right boundary: if the pattern ends with a letter, the character after
+    the match must not be alphanumeric or underscore.
+
+This means LaTeX patterns like `\alpha` or `\to` start with `\` (not a
+letter), so the left boundary check is not triggered -- `\alpha` matches
+everywhere. But `alpha` in Typst starts with a letter, so it requires a
+word boundary on the left (won't match inside `alphanum`).
+
+Operator patterns like `->` or `!=` are matched everywhere (they don't
+start or end with a letter).
+
+The `boundary` field in the list format (|sigil-list-format|) overrides this
+per symbol. The `boundary = "left"` setting is the key to comfortable
+LaTeX/Typst use:
+  - In LaTeX: `\alpha_1` matches `\alpha`, `\sum_{i=0}^n` matches `\sum`.
+  - In Typst: `alpha_1` matches `alpha`, `sum_(i=0)^n` matches `sum`.
+
+Without it, the right boundary check would reject these matches because `_`
+follows the pattern.
+
+------------------------------------------------------------------------------
+8.3 Per-filetype symbols                            *sigil-filetype-symbols*
+
+Use `filetype_symbols` to define different symbol sets for different
+languages. Global `symbols` apply to all filetypes; filetype symbols merge
+on top.
+
+Example -- LaTeX and Typst with shared operators, separate letter syntax: >lua
+
+  require("sigil").setup({
+    filetypes = { "tex", "plaintex", "latex", "typst" },
+    symbols = {
+      -- Shared across all filetypes (operators without backslash)
+      ["!="]  = "≠",
+      ["<="]  = "≤",
+      [">="]  = "≥",
+    },
+    filetype_symbols = {
+      tex = {
+        { pattern = "\\alpha", replacement = "α", boundary = "left" },
+        { pattern = "\\beta",  replacement = "β", boundary = "left" },
+        { pattern = "\\to",    replacement = "→" },
+        { pattern = "\\sum",   replacement = "∑", boundary = "left" },
+      },
+      typst = {
+        { pattern = "alpha",   replacement = "α", boundary = "left" },
+        { pattern = "beta",    replacement = "β", boundary = "left" },
+        { pattern = "->",      replacement = "→" },
+        { pattern = "sum",     replacement = "∑", boundary = "left" },
+      },
+    },
+  })
+<
+
+==============================================================================
+9. CONTEXT AWARENESS                                         *sigil-context*
+
+------------------------------------------------------------------------------
+9.1 Strings and comments                              *sigil-skip-strings*
+
+By default, sigil skips patterns found inside string literals and comments.
+This prevents false positives like `% \alpha is the angle` (in a LaTeX
+comment) from being prettified.
+
+Detection uses Tree-sitter when a parser is available for the buffer's
+filetype (recommended). Otherwise, sigil falls back to Vim's syntax
+highlighting groups. Tree-sitter is more accurate.
+
+To disable this filtering: >lua
+
+  require("sigil").setup({
+    skip_strings = false,
+    skip_comments = false,
+  })
+<
+------------------------------------------------------------------------------
+9.2 Custom predicates                              *sigil-custom-predicates*
+
+Most users will never need this. The built-in options (`skip_strings`,
+`skip_comments`, `filetype_symbol_contexts`) handle common scenarios. Custom
+predicates are an escape hatch for rare edge cases -- see
+|sigil-config-predicate| for when they might be useful.
+
+If you do use a custom predicate, note that it completely replaces the
+built-in `skip_strings`/`skip_comments` logic. To keep the defaults and
+add extra rules on top, call the built-in functions yourself: >lua
+
+  predicate = function(ctx)
+    local pred = require("sigil.predicate")
+    -- Keep default string/comment skipping
+    if pred.in_string(ctx.buf, ctx.row, ctx.col) then
+      return false
+    end
+    if pred.in_comment(ctx.buf, ctx.row, ctx.col) then
+      return false
+    end
+    -- Extra rule: skip \verbatim-like environments
+    -- (add your custom logic here)
+    return true
+  end,
+<
+------------------------------------------------------------------------------
+9.3 Math context                                       *sigil-math-context*
+
+For LaTeX and Typst, you often want certain symbols to appear only inside
+math regions (`$...$`, `\[...\]`, `equation` environments, etc.). For
+example, `alpha` in Typst is a math symbol -- it should become `α` inside
+`$alpha + beta$` but stay as plain text in a paragraph.
+
+The recommended approach is to use structured symbol subtables
+(|sigil-config-structured-symbols|). Place math-only symbols in the `math`
+subtable, text-only symbols in `text`, and unrestricted symbols in `any`.
+
+Typst example (most common use case -- all Typst symbols are math-only): >lua
+
+  require("sigil").setup({
+    filetypes = { "typst" },
+    filetype_symbols = {
+      typst = {
+        math = {
+          { pattern = "alpha", replacement = "α", boundary = "left" },
+          { pattern = "beta",  replacement = "β", boundary = "left" },
+          { pattern = "sum",   replacement = "∑", boundary = "left" },
+          { pattern = "->",    replacement = "→" },
+        },
+      },
+    },
+  })
+<
+LaTeX example (restrict Greek letters to math, keep operators everywhere): >lua
+
+  require("sigil").setup({
+    filetypes = { "tex" },
+    filetype_symbols = {
+      tex = {
+        math = {
+          { pattern = "\\alpha", replacement = "α", boundary = "left" },
+          { pattern = "\\beta",  replacement = "β", boundary = "left" },
+        },
+        any = {
+          { pattern = "\\leq", replacement = "≤" },
+          { pattern = "\\to",  replacement = "→" },
+        },
+      },
+    },
+  })
+<
+Symbols in `math` are only prettified inside a math context. Symbols in
+`any` are prettified everywhere. Symbols in `text` are only prettified
+outside math context.
+
+sigil detects math context automatically:
+  - LaTeX: Tree-sitter captures or syntax groups containing "math", plus
+    `$...$` and `\[...\]` environments.
+  - Typst: Tree-sitter node types `math` / `equation`, or `$...$` fallback.
+
+You can provide a custom context predicate: >lua
+
+  filetype_context_predicates = {
+    tex = function(ctx)
+      -- Your custom math detection for LaTeX
+      return my_math_check(ctx.buf, ctx.row, ctx.col)
+    end,
+  }
+<
+                                        *sigil-config-symbol-contexts-legacy*
+Legacy alternative: `filetype_symbol_contexts` ~
+
+The `filetype_symbol_contexts` option still works for backward compatibility.
+It uses a flat symbol list and a separate list of pattern names to mark as
+math-only or text-only: >lua
+
+  local typst_symbols = {
+    { pattern = "alpha", replacement = "α", boundary = "left" },
+    { pattern = "->",    replacement = "→" },
+  }
+  local math_only = { "alpha" }
+
+  require("sigil").setup({
+    filetype_symbols = { typst = typst_symbols },
+    filetype_symbol_contexts = {
+      typst = { math_only = math_only },
+    },
+  })
+<
+Structured subtables (above) are preferred because they avoid the
+duplication of listing patterns in two places.
+==============================================================================
+10. ATOMIC MOTIONS                                          *sigil-motions*
+
+When `atomic_motions` is `true` (default) and `unprettify_at_point` is
+disabled, sigil remaps several keys in attached buffers so that prettified
+symbols behave as single characters.
+
+Without atomic motions, pressing `l` on a symbol like `α` (which replaces
+`\alpha`, six bytes) would move through the hidden original text byte by
+byte, causing the cursor to appear to "stick" on the symbol. With atomic
+motions the cursor jumps over the entire symbol in one keystroke.
+
+Note: atomic motions are automatically disabled when `unprettify_at_point`
+is set to `true` or `"line"`, because in those modes the cursor already
+sees the original text and normal Vim motions work correctly.
+
+------------------------------------------------------------------------------
+10.1 Normal mode                                    *sigil-motions-normal*
+
+  `h`   Move left. If the cursor is inside or just after a symbol, jump
+        to the symbol's start.
+  `l`   Move right. If the cursor is on a symbol, jump past its end.
+  `j`   Move down. Preserves the display column (conceal-aware), so the
+        cursor lands in the visually expected position.
+  `k`   Move up. Same display-column preservation as `j`.
+  `w`   Word forward. Symbols act as word boundaries.
+  `b`   Word backward. Symbols act as word boundaries.
+  `e`   End of word. Symbols act as word boundaries.
+  `x`   Delete character. On a symbol, deletes the entire original text
+        (e.g. pressing `x` on `α` deletes `\alpha`, not just `\`).
+  `X`   Delete character before cursor. Same symbol-aware behavior.
+  `s`   Substitute. On a symbol, deletes the entire original text and
+        enters insert mode.
+  `a`   Append. On a symbol, positions the cursor after the symbol's
+        original text and enters insert mode.
+  `c`   Change operator. Works with motions; expands the affected range
+        to include full symbols at boundaries.
+  `cc`  Change line. Delegated to built-in `cc`.
+
+------------------------------------------------------------------------------
+10.2 Insert mode                                    *sigil-motions-insert*
+
+  `<BS>`    Backspace. If the character before the cursor is part of a
+            prettified symbol, deletes the entire symbol.
+  `<C-f>`   Move right. Skips over a prettified symbol in one step.
+  `<C-b>`   Move left. Skips over a prettified symbol in one step.
+
+These mappings preserve compatibility with plugins that remap the same keys
+(e.g. mini.pairs). sigil saves the original mapping and falls back to it
+when not on a symbol.
+
+------------------------------------------------------------------------------
+10.3 Visual mode                                    *sigil-motions-visual*
+
+  `h`, `l`, `j`, `k`, `w`, `b`, `e` -- same symbol-aware behavior as
+  normal mode, adapted for visual selection.
+
+When symbols are partially selected, sigil expands the visual highlight to
+cover the full symbol, so you always see the replacement glyph highlighted
+rather than a confusing partial highlight.
+
+==============================================================================
+11. UNPRETTIFY AT POINT                                   *sigil-unprettify*
+
+This feature lets you peek at the original text without disabling sigil.
+Especially useful when editing LaTeX or Typst, where you need to see the
+actual commands to modify them.
+
+When `unprettify_at_point = true`:
+  The symbol under the cursor reverts to original text. For example, if the
+  cursor is on `α`, it shows `\alpha`. All other symbols on the same line
+  remain prettified. As soon as the cursor moves away, `α` reappears.
+
+When `unprettify_at_point = "line"`:
+  Every symbol on the cursor line reverts to original text. A line like
+  `$α + β = γ$` becomes `$\alpha + \beta = \gamma$` when the cursor is on
+  it. When the cursor moves to a different line, all symbols on the previous
+  line are re-prettified. This is the recommended mode for LaTeX editing --
+  it gives a VimTeX-like experience.
+
+Both modes work in normal, insert, and visual modes. The unprettify state
+survives undo/redo: if you undo a change and the cursor stays on a symbol,
+the symbol remains unprettified.
+
+Note: enabling unprettify at point disables |sigil-motions| because they
+are no longer needed -- the cursor sees real text.
+
+==============================================================================
+12. PERFORMANCE                                           *sigil-performance*
+
+sigil is designed to handle large files efficiently.
+
+Incremental updates ~
+  When you edit text, only the changed lines are re-prettified. The
+  `update_debounce_ms` setting batches rapid changes to avoid redundant
+  work during fast typing.
+
+Lazy prettification ~
+  Files larger than `lazy_prettify_threshold` lines (default: 500) enter
+  lazy mode. Instead of processing the entire file, sigil only prettifies
+  lines near the visible window (visible area ± `lazy_prettify_buffer`
+  lines). As you scroll, new regions are prettified on demand with
+  debounced scroll handlers.
+
+Caching ~
+  Sorted symbol lists and predicate functions are cached per filetype after
+  the first use, so they are not rebuilt on every line.
+
+You can benchmark sigil on your machine: >vim
+
+  :SigilBenchmark
+<
+This creates test buffers of various sizes and reports attach time and
+extmark count.
+
+==============================================================================
+13. HIGHLIGHT GROUPS                                       *sigil-highlights*
+
+                                                           *hl-SigilSymbol*
+`SigilSymbol`     Default highlight group for prettified symbols. Linked to
+                  `Special` by default. You can override it: >lua
+
+  vim.api.nvim_set_hl(0, "SigilSymbol", { fg = "#56b6c2", italic = true })
+<
+To use it, set `hl_group = "SigilSymbol"` in your config, or use it as the
+`hl_group` field on individual symbols.
+
+When `hl_group` is `nil` (the default), symbols inherit the conceal
+highlight and blend with surrounding text.
+
+You can define your own highlight groups and assign them to symbols: >lua
+
+  vim.api.nvim_set_hl(0, "SigilGreek", { fg = "#56b6c2", italic = true })
+  vim.api.nvim_set_hl(0, "SigilArrow", { fg = "#c678dd" })
+
+  require("sigil").setup({
+    filetype_symbols = {
+      tex = {
+        { pattern = "\\alpha", replacement = "α", hl_group = "SigilGreek" },
+        { pattern = "\\to",    replacement = "→", hl_group = "SigilArrow" },
+      },
+    },
+  })
+<
+==============================================================================
+14. TIPS AND RECIPES                                        *sigil-recipes*
+
+Full LaTeX setup ~
+
+A comprehensive LaTeX configuration with Greek letters, operators, arrows,
+logic, and set notation: >lua
+
+  local latex_symbols = {
+    -- Greek letters (boundary = "left" for subscripts: \alpha_1)
+    { pattern = "\\alpha",   replacement = "α", boundary = "left" },
+    { pattern = "\\beta",    replacement = "β", boundary = "left" },
+    { pattern = "\\gamma",   replacement = "γ", boundary = "left" },
+    { pattern = "\\delta",   replacement = "δ", boundary = "left" },
+    { pattern = "\\epsilon", replacement = "ε", boundary = "left" },
+    { pattern = "\\lambda",  replacement = "λ", boundary = "left" },
+    { pattern = "\\sigma",   replacement = "σ", boundary = "left" },
+    { pattern = "\\omega",   replacement = "ω", boundary = "left" },
+    { pattern = "\\Gamma",   replacement = "Γ", boundary = "left" },
+    { pattern = "\\Delta",   replacement = "Δ", boundary = "left" },
+    { pattern = "\\Sigma",   replacement = "Σ", boundary = "left" },
+    { pattern = "\\Omega",   replacement = "Ω", boundary = "left" },
+    -- Operations (boundary = "left" for limits: \sum_{i=0}^n)
+    { pattern = "\\sum",     replacement = "∑", boundary = "left" },
+    { pattern = "\\prod",    replacement = "∏", boundary = "left" },
+    { pattern = "\\int",     replacement = "∫", boundary = "left" },
+    { pattern = "\\times",   replacement = "×" },
+    { pattern = "\\cdot",    replacement = "·" },
+    -- Comparisons
+    { pattern = "\\leq",     replacement = "≤" },
+    { pattern = "\\geq",     replacement = "≥" },
+    { pattern = "\\neq",     replacement = "≠" },
+    { pattern = "\\approx",  replacement = "≈" },
+    { pattern = "\\equiv",   replacement = "≡" },
+    { pattern = "\\in",      replacement = "∈" },
+    -- Arrows
+    { pattern = "\\rightarrow",    replacement = "→" },
+    { pattern = "\\to",            replacement = "→" },
+    { pattern = "\\leftarrow",     replacement = "←" },
+    { pattern = "\\Rightarrow",    replacement = "⇒" },
+    { pattern = "\\Leftrightarrow", replacement = "⇔" },
+    { pattern = "\\mapsto",        replacement = "↦" },
+    -- Logic
+    { pattern = "\\forall",  replacement = "∀", boundary = "left" },
+    { pattern = "\\exists",  replacement = "∃", boundary = "left" },
+    { pattern = "\\land",    replacement = "∧" },
+    { pattern = "\\lor",     replacement = "∨" },
+    { pattern = "\\neg",     replacement = "¬" },
+    -- Misc
+    { pattern = "\\infty",      replacement = "∞" },
+    { pattern = "\\partial",    replacement = "∂" },
+    { pattern = "\\nabla",      replacement = "∇" },
+    { pattern = "\\varnothing", replacement = "∅" },
+    -- Sets
+    { pattern = "\\mathbb{R}", replacement = "ℝ" },
+    { pattern = "\\mathbb{N}", replacement = "ℕ" },
+    { pattern = "\\mathbb{Z}", replacement = "ℤ" },
+    { pattern = "\\mathbb{C}", replacement = "ℂ" },
+  }
+
+  require("sigil").setup({
+    filetypes = { "tex", "plaintex", "latex" },
+    filetype_symbols = {
+      tex = latex_symbols,
+      plaintex = latex_symbols,
+      latex = latex_symbols,
+    },
+    unprettify_at_point = "line",  -- VimTeX-like: see source on cursor line
+  })
+<
+Full Typst setup ~
+
+Typst symbols are math-only (they have meaning only inside `$...$`).
+Use the `math` subtable to declare this directly: >lua
+
+  require("sigil").setup({
+    filetypes = { "typst" },
+    filetype_symbols = {
+      typst = {
+        math = {
+          -- Greek letters
+          { pattern = "alpha",   replacement = "α", boundary = "left" },
+          { pattern = "beta",    replacement = "β", boundary = "left" },
+          { pattern = "gamma",   replacement = "γ", boundary = "left" },
+          { pattern = "delta",   replacement = "δ", boundary = "left" },
+          { pattern = "lambda",  replacement = "λ", boundary = "left" },
+          { pattern = "sigma",   replacement = "σ", boundary = "left" },
+          { pattern = "omega",   replacement = "ω", boundary = "left" },
+          -- Operations
+          { pattern = "sum",     replacement = "∑", boundary = "left" },
+          { pattern = "product", replacement = "∏", boundary = "left" },
+          { pattern = "integral", replacement = "∫", boundary = "left" },
+          -- Arrows
+          { pattern = "<->", replacement = "↔" },
+          { pattern = "|->", replacement = "↦" },
+          { pattern = "->",  replacement = "→" },
+          { pattern = "<-",  replacement = "←" },
+          { pattern = "=>",  replacement = "⇒" },
+          -- Comparisons
+          { pattern = ">=",     replacement = "≥" },
+          { pattern = "<=",     replacement = "≤" },
+          { pattern = "!=",     replacement = "≠" },
+          { pattern = "approx", replacement = "≈" },
+          { pattern = "in",     replacement = "∈" },
+          -- Logic
+          { pattern = "forall", replacement = "∀", boundary = "left" },
+          { pattern = "exists", replacement = "∃", boundary = "left" },
+          -- Misc
+          { pattern = "infinity", replacement = "∞" },
+          { pattern = "partial",  replacement = "∂" },
+          -- Sets
+          { pattern = "NN", replacement = "ℕ" },
+          { pattern = "ZZ", replacement = "ℤ" },
+          { pattern = "RR", replacement = "ℝ" },
+          { pattern = "CC", replacement = "ℂ" },
+        },
+      },
+    },
+    unprettify_at_point = true,
+  })
+<
+LaTeX + Typst combined ~
+
+You can configure both in a single setup call: >lua
+
+  require("sigil").setup({
+    filetypes = { "tex", "plaintex", "latex", "typst" },
+    filetype_symbols = {
+      tex = latex_symbols,        -- from LaTeX recipe above
+      plaintex = latex_symbols,
+      latex = latex_symbols,
+      typst = {
+        math = typst_math_symbols,  -- from Typst recipe above
+      },
+    },
+    unprettify_at_point = "line",
+  })
+<
+Generic programming languages ~
+
+sigil can also be used outside of TeX/Typst for common operators: >lua
+
+  require("sigil").setup({
+    filetypes = "*",
+    excluded_filetypes = { "help", "man", "qf", "lazy", "mason" },
+    symbols = {
+      ["!="]  = "≠",
+      ["<="]  = "≤",
+      [">="]  = "≥",
+      ["->"]  = "→",
+      ["=>"]  = "⇒",
+      ["&&"]  = "∧",
+      ["||"]  = "∨",
+    },
+    unprettify_at_point = true,
+  })
+<
+Disable context filtering ~
+
+By default sigil skips strings and comments. To prettify everywhere: >lua
+
+  require("sigil").setup({
+    skip_strings = false,
+    skip_comments = false,
+  })
+<
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:

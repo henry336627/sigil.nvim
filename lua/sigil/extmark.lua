@@ -13,15 +13,17 @@ end
 ---@param col integer 0-indexed start column
 ---@param end_col integer 0-indexed end column (exclusive)
 ---@param replacement string Single character to display
+---@param hl_group? string Optional highlight group for the replacement
 ---@return integer|nil Extmark ID or nil on failure
-function M.create(buf, row, col, end_col, replacement)
+function M.create(buf, row, col, end_col, replacement, hl_group)
+	local virt_text_entry = hl_group and { replacement, hl_group } or { replacement }
 	local opts = {
 		end_col = end_col,
 		-- Hide original text; render replacement via virt_text so Visual highlight can combine.
 		-- Use a single-space conceal so the replacement still occupies one cell.
 		conceal = " ",
 		-- No explicit highlight: lets Visual selection background show through.
-		virt_text = { { replacement } },
+		virt_text = { virt_text_entry },
 		virt_text_pos = "overlay",
 		-- Keep virt_text visible even when cursor is inside the extmark.
 		-- This ensures consistent visual feedback during navigation.

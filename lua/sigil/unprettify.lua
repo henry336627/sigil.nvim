@@ -12,6 +12,7 @@ local M = {}
 ---@field col integer 0-indexed start column
 ---@field end_col integer 0-indexed end column
 ---@field replacement string Original replacement character
+---@field hl_group? string Highlight group for the replacement
 
 ---@class sigil.UnprettifyState
 ---@field mode "symbol"|"line" What kind of unprettify is active
@@ -22,16 +23,17 @@ local M = {}
 ---@type table<integer, sigil.UnprettifyState|nil>
 M._state = {}
 
----Extract replacement character from extmark details
+---Extract replacement character and hl_group from extmark details
 ---@param details table Extmark details
----@return string|nil Replacement character
+---@return string|nil replacement Replacement character
+---@return string|nil hl_group Highlight group
 local function get_replacement(details)
 	if details.virt_text and #details.virt_text > 0 then
-		return details.virt_text[1][1]
+		return details.virt_text[1][1], details.virt_text[1][2]
 	elseif details.conceal and details.conceal ~= "" and details.conceal ~= " " then
-		return details.conceal
+		return details.conceal, nil
 	end
-	return nil
+	return nil, nil
 end
 
 ---Restore all unprettified symbols
@@ -56,11 +58,13 @@ local function restore_symbols(buf)
 			local col = mark[3]
 			local end_col = mark[4].end_col or (col + 1)
 
+			local virt_text_entry = sym.hl_group and { sym.replacement, sym.hl_group }
+				or { sym.replacement }
 			pcall(vim.api.nvim_buf_set_extmark, buf, state.ns, row, col, {
 				id = sym.id,
 				end_col = end_col,
 				conceal = " ",
-				virt_text = { { sym.replacement } },
+				virt_text = { virt_text_entry },
 				virt_text_pos = "overlay",
 				virt_text_hide = false,
 				hl_mode = "combine",
@@ -97,7 +101,7 @@ local function get_line_symbols(buf, row)
 	for _, mark in ipairs(marks) do
 		local col = mark[3]
 		local end_col = mark[4].end_col or (col + 1)
-		local replacement = get_replacement(mark[4])
+		local replacement, hl_group = get_replacement(mark[4])
 
 		if replacement and end_col > col then
 			table.insert(symbols, {
@@ -106,6 +110,7 @@ local function get_line_symbols(buf, row)
 				col = col,
 				end_col = end_col,
 				replacement = replacement,
+				hl_group = hl_group,
 			})
 		end
 	end

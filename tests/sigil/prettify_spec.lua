@@ -206,4 +206,116 @@ describe("sigil.prettify", function()
 			assert.is_true(vim.tbl_contains(replacements, "≠"))
 		end)
 	end)
+
+	describe("hl_group", function()
+		local state
+
+		before_each(function()
+			state = require("sigil.state")
+			vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+				"lambda -> x",
+			})
+			state.attach(0)
+		end)
+
+		after_each(function()
+			state.detach(0)
+		end)
+
+		it("should carry per-symbol hl_group into match result", function()
+			local symbols = {
+				{ pattern = "lambda", replacement = "λ", hl_group = "SigilLambda" },
+			}
+			local matches = prettify.find_matches("lambda -> x", symbols)
+			assert.equals(1, #matches)
+			assert.equals("SigilLambda", matches[1].hl_group)
+		end)
+
+		it("should have nil hl_group when not set on symbol", function()
+			local symbols = {
+				{ pattern = "->", replacement = "→" },
+			}
+			local matches = prettify.find_matches("x -> y", symbols)
+			assert.equals(1, #matches)
+			assert.is_nil(matches[1].hl_group)
+		end)
+
+		it("should apply per-symbol hl_group to extmark virt_text", function()
+			local hl_symbols = {
+				{ pattern = "lambda", replacement = "λ", hl_group = "SigilLambda" },
+				{ pattern = "->", replacement = "→" },
+			}
+			config.setup({ symbols = hl_symbols })
+			prettify.prettify_buffer(0)
+
+			local marks = vim.api.nvim_buf_get_extmarks(0, state.ns, 0, -1, { details = true })
+			-- Find the lambda mark
+			local found_lambda = false
+			local found_arrow = false
+			for _, mark in ipairs(marks) do
+				local details = mark[4]
+				if details.virt_text and details.virt_text[1][1] == "λ" then
+					assert.equals("SigilLambda", details.virt_text[1][2])
+					found_lambda = true
+				elseif details.virt_text and details.virt_text[1][1] == "→" then
+					-- No hl_group set, virt_text entry should have no second element
+					assert.is_nil(details.virt_text[1][2])
+					found_arrow = true
+				end
+			end
+			assert.is_true(found_lambda)
+			assert.is_true(found_arrow)
+		end)
+
+		it("should apply global default hl_group when per-symbol not set", function()
+			config.setup({
+				symbols = {
+					{ pattern = "->", replacement = "→" },
+				},
+				hl_group = "SigilSymbol",
+			})
+			vim.api.nvim_buf_set_lines(0, 0, -1, false, { "x -> y" })
+			state.clear_lines(0, 0, vim.api.nvim_buf_line_count(0))
+			prettify.prettify_buffer(0)
+
+			local marks = vim.api.nvim_buf_get_extmarks(0, state.ns, 0, -1, { details = true })
+			assert.is_true(#marks > 0)
+			local details = marks[1][4]
+			assert.equals("→", details.virt_text[1][1])
+			assert.equals("SigilSymbol", details.virt_text[1][2])
+		end)
+
+		it("should prefer per-symbol hl_group over global default", function()
+			config.setup({
+				symbols = {
+					{ pattern = "lambda", replacement = "λ", hl_group = "SigilLambda" },
+				},
+				hl_group = "SigilSymbol",
+			})
+			vim.api.nvim_buf_set_lines(0, 0, -1, false, { "lambda" })
+			state.clear_lines(0, 0, vim.api.nvim_buf_line_count(0))
+			prettify.prettify_buffer(0)
+
+			local marks = vim.api.nvim_buf_get_extmarks(0, state.ns, 0, -1, { details = true })
+			assert.is_true(#marks > 0)
+			local details = marks[1][4]
+			assert.equals("λ", details.virt_text[1][1])
+			assert.equals("SigilLambda", details.virt_text[1][2])
+		end)
+
+		it("should have no highlight when neither per-symbol nor global hl_group set", function()
+			config.setup({
+				symbols = { ["lambda"] = "λ" },
+			})
+			vim.api.nvim_buf_set_lines(0, 0, -1, false, { "lambda" })
+			state.clear_lines(0, 0, vim.api.nvim_buf_line_count(0))
+			prettify.prettify_buffer(0)
+
+			local marks = vim.api.nvim_buf_get_extmarks(0, state.ns, 0, -1, { details = true })
+			assert.is_true(#marks > 0)
+			local details = marks[1][4]
+			assert.equals("λ", details.virt_text[1][1])
+			assert.is_nil(details.virt_text[1][2])
+		end)
+	end)
 end)
