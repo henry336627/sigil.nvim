@@ -1,5 +1,7 @@
 # sigil
 
+[![Mentioned in Awesome Neovim](https://awesome.re/mentioned-badge.svg)](https://github.com/rockerBOO/awesome-neovim)
+
 Prettify symbols for Neovim. Visually replaces text patterns with Unicode
 symbols while you edit. The file on disk is never modified.
 
